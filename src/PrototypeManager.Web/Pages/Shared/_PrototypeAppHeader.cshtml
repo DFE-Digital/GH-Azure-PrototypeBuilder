@@ -1,0 +1,43 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<header class="dfe-c-fe-app-header dfe-c-fe-panel" aria-label="Prototype app">
+    <div class="dfe-c-fe-app-header__main">
+        <div class="dfe-c-fe-app-header__identity">
+            <h1 class="dfe-c-fe-app-header__title">@Model.Prototype!.Name</h1>
+
+            <dl class="dfe-c-fe-app-header__facts">
+                <div class="dfe-c-fe-app-header__fact">
+                    <dt class="dfe-c-fe-app-header__fact-label">Status</dt>
+                    <dd class="dfe-c-fe-app-header__fact-value">
+                        <span id="prototype-status" class="@ListModel.GetStatusBadgeClass(Model.Prototype.Status)">
+                            @ListModel.GetStatusLabel(Model.Prototype.Status)
+                        </span>
+                    </dd>
+                </div>
+                <div class="dfe-c-fe-app-header__fact">
+                    <dt class="dfe-c-fe-app-header__fact-label">Business area</dt>
+                    <dd class="dfe-c-fe-app-header__fact-value">
+                        @(Model.Prototype.BusinessArea?.Name ?? "No business area")
+                    </dd>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.Prototype.PrototypeUrl))
+                {
+                    <div class="dfe-c-fe-app-header__fact dfe-c-fe-app-header__fact--wide">
+                        <dt class="dfe-c-fe-app-header__fact-label">App URL</dt>
+                        <dd class="dfe-c-fe-app-header__fact-value">
+                            <a class="govuk-link dfe-c-fe-app-header__url"
+                               href="@Model.Prototype.PrototypeUrl"
+                               target="_blank"
+                               rel="noopener noreferrer">
+                                @Model.Prototype.PrototypeUrl
+                            </a>
+                        </dd>
+                    </div>
+                }
+            </dl>
+        </div>
+
+        @await Html.PartialAsync("_PrototypeViewAppButton", Model)
+    </div>
+</header>

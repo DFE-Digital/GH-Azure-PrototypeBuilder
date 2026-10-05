@@ -1,0 +1,216 @@
+@page
+@model LiveModel
+@{
+    ViewData["Title"] = "Live";
+}
+
+<div class="dfe-c-fe-shell live-page" id="live-operations" data-feed-url="@Url.Page("/Live", "Feed")">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Signed in as @Model.UserEmail</p>
+            <h1 class="dfe-c-fe-title">Live</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-4">
+                Real-time view of prototype hosting activity, active jobs, and status changes across everything you can access.
+            </p>
+            <div class="live-page__status-bar">
+                <span class="live-page__live-indicator" id="live-operations-indicator" hidden>Updating live</span>
+                <p class="live-page__updated-at govuk-!-margin-bottom-0">
+                    Last updated <time id="live-operations-updated-at" datetime="@Model.Snapshot.UpdatedAt.ToString("O")">
+                        @Model.Snapshot.UpdatedAt.ToLocalTime().ToString("HH:mm:ss")
+                    </time>
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <ul class="dfe-c-fe-stat-list live-page__summary" id="live-operations-summary" aria-label="Prototype activity summary">
+        <li class="dfe-c-fe-stat-list__item">
+            <span class="dfe-c-fe-stat-list__value" data-summary="total">@Model.Snapshot.Summary.Total</span>
+            <span class="dfe-c-fe-stat-list__label">visible</span>
+        </li>
+        <li class="dfe-c-fe-stat-list__item">
+            <span class="dfe-c-fe-badge dfe-c-fe-badge--success" data-summary="live">@Model.Snapshot.Summary.Live live</span>
+        </li>
+        <li class="dfe-c-fe-stat-list__item">
+            <span class="dfe-c-fe-badge dfe-c-fe-badge--info" data-summary="inProgress">@Model.Snapshot.Summary.InProgress in progress</span>
+        </li>
+        <li class="dfe-c-fe-stat-list__item">
+            <span class="dfe-c-fe-badge dfe-c-fe-badge--danger" data-summary="failed">@Model.Snapshot.Summary.Failed failed</span>
+        </li>
+        <li class="dfe-c-fe-stat-list__item">
+            <span class="dfe-c-fe-badge dfe-c-fe-badge--warning" data-summary="activeJobs">@Model.Snapshot.Summary.ActiveJobs active jobs</span>
+        </li>
+    </ul>
+
+    <div class="live-page__layout">
+        <section class="dfe-c-fe-panel live-page__panel" aria-labelledby="live-active-heading">
+            <div class="dfe-c-fe-panel__header">
+                <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0" id="live-active-heading">In progress now</h2>
+                <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                    Prototypes with queued or running background jobs.
+                </p>
+            </div>
+
+            <div id="live-operations-active">
+                @if (!Model.Snapshot.ActiveOperations.Any())
+                {
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0 live-page__empty" data-empty="active">
+                        Nothing is running right now. This page will update automatically when a job starts.
+                    </p>
+                }
+                else
+                {
+                    <ul class="live-page__active-list govuk-!-margin-bottom-0">
+                        @foreach (var operation in Model.Snapshot.ActiveOperations)
+                        {
+                            <li class="live-page__active-item" data-prototype-id="@operation.PrototypeId">
+                                <div class="live-page__active-header">
+                                    <h3 class="live-page__active-title">
+                                        <a class="govuk-link" href="@operation.DetailUrl">@operation.PrototypeName</a>
+                                    </h3>
+                                    <span class="@operation.StatusBadgeClass">@operation.StatusLabel</span>
+                                </div>
+                                <p class="live-page__active-meta">
+                                    <span class="@operation.JobStatusBadgeClass">@operation.JobStatusLabel</span>
+                                    <span class="live-page__active-meta-separator" aria-hidden="true">·</span>
+                                    <span>@operation.JobTypeLabel</span>
+                                    @if (!string.IsNullOrWhiteSpace(operation.BusinessAreaName))
+                                    {
+                                        <span class="live-page__active-meta-separator" aria-hidden="true">·</span>
+                                        <span>@operation.BusinessAreaName</span>
+                                    }
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(operation.CurrentStepLabel))
+                                {
+                                    <p class="live-page__active-step">Current step: @operation.CurrentStepLabel</p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(operation.SetupUrl))
+                                {
+                                    <p class="govuk-!-margin-bottom-0">
+                                        <a class="govuk-link" href="@operation.SetupUrl">View setup progress</a>
+                                    </p>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+
+        <section class="dfe-c-fe-panel live-page__panel" aria-labelledby="live-events-heading">
+            <div class="dfe-c-fe-panel__header">
+                <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0" id="live-events-heading">Recent activity</h2>
+                <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                    Jobs and events from the last 30 minutes.
+                </p>
+            </div>
+
+            <div id="live-operations-events">
+                @if (!Model.Snapshot.RecentEvents.Any())
+                {
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0 live-page__empty" data-empty="events">
+                        No recent activity yet.
+                    </p>
+                }
+                else
+                {
+                    <ol class="activity-feed govuk-!-margin-bottom-0">
+                        @foreach (var item in Model.Snapshot.RecentEvents)
+                        {
+                            <li class="activity-feed__item @GetEventClass(item.Status)" data-event-id="@item.Id">
+                                <div class="activity-feed__marker" aria-hidden="true"></div>
+                                <article class="activity-feed__content">
+                                    <div class="activity-feed__header">
+                                        <h3 class="activity-feed__title">
+                                            <a class="govuk-link" href="@item.DetailUrl">@item.PrototypeName</a>
+                                            <span class="live-page__event-action">@item.Action</span>
+                                        </h3>
+                                        <span class="@item.StatusBadgeClass">@item.StatusLabel</span>
+                                    </div>
+                                    <p class="activity-feed__meta">
+                                        <time datetime="@item.OccurredAt.ToString("O")">
+                                            @item.OccurredAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm:ss")
+                                        </time>
+                                    </p>
+                                    @if (!string.IsNullOrWhiteSpace(item.Summary))
+                                    {
+                                        <p class="activity-feed__summary">@item.Summary</p>
+                                    }
+                                </article>
+                            </li>
+                        }
+                    </ol>
+                }
+            </div>
+        </section>
+    </div>
+
+    <section class="dfe-c-fe-panel live-page__panel" aria-labelledby="live-prototypes-heading">
+        <div class="dfe-c-fe-panel__header dfe-c-fe-panel__header--split">
+            <div>
+                <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0" id="live-prototypes-heading">All prototypes</h2>
+                <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                    Status board for everything visible to you. Active jobs appear first.
+                </p>
+            </div>
+            <div class="dfe-c-fe-panel__header-actions">
+                <a class="govuk-link" href="@Url.Page("/Prototypes/List")">View full list</a>
+            </div>
+        </div>
+
+        @if (!Model.Snapshot.Prototypes.Any())
+        {
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 live-page__empty" data-empty="prototypes">
+                No prototypes are visible to you yet.
+            </p>
+        }
+        else
+        {
+            <div class="govuk-table-responsive">
+                <table class="govuk-table live-page__table" id="live-operations-prototypes">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Prototype</th>
+                            <th scope="col" class="govuk-table__header">Business area</th>
+                            <th scope="col" class="govuk-table__header">Owner</th>
+                            <th scope="col" class="govuk-table__header">Status</th>
+                            <th scope="col" class="govuk-table__header">Active job</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var prototype in Model.Snapshot.Prototypes)
+                        {
+                            <tr class="govuk-table__row @(prototype.HasActiveJob ? "live-page__table-row--active" : null)"
+                                data-prototype-id="@prototype.PrototypeId">
+                                <td class="govuk-table__cell">
+                                    <a class="govuk-link govuk-!-font-weight-bold" href="@prototype.DetailUrl">@prototype.PrototypeName</a>
+                                </td>
+                                <td class="govuk-table__cell">@(prototype.BusinessAreaName ?? "—")</td>
+                                <td class="govuk-table__cell">@prototype.OwnerEmail</td>
+                                <td class="govuk-table__cell">
+                                    <span class="@prototype.StatusBadgeClass">@prototype.StatusLabel</span>
+                                </td>
+                                <td class="govuk-table__cell">@(prototype.ActiveJobLabel ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@section BodyEnd {
+    <script defer src="~/js/live-operations.js" asp-append-version="true"></script>
+}
+
+@functions {
+    private static string GetEventClass(string status) => status switch
+    {
+        "Running" => "activity-feed__item--running",
+        "Queued" => "activity-feed__item--queued",
+        "Succeeded" => "activity-feed__item--succeeded",
+        "Failed" => "activity-feed__item--failed",
+        _ => "activity-feed__item--recorded"
+    };
+}

@@ -1,0 +1,12 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+@if (Model.CanViewApp)
+{
+    <a class="govuk-button dfe-c-fe-view-app"
+       href="@Model.Prototype!.PrototypeUrl"
+       target="_blank"
+       rel="noopener noreferrer">
+        View app
+    </a>
+}

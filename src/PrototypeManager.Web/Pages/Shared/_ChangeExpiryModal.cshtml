@@ -1,0 +1,39 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="change-expiry-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="change-expiry-modal-title"
+        aria-describedby="change-expiry-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="ExtendExpiry" asp-route-id="@Model.Prototype!.Id">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="change-expiry-modal-title">Change expiry date</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="change-expiry-modal-description">
+                <p class="govuk-body">
+                    Current expiry date: <strong>@Model.Prototype!.ExpiresAt.ToString("dd MMM yyyy")</strong>.
+                </p>
+                <govuk-date-input for="NewExpiryDate"
+                                  id="new-expiry-date"
+                                  error-message-prefix="The expiry date">
+                    <govuk-date-input-fieldset>
+                        <govuk-date-input-fieldset-legend class="govuk-fieldset__legend--s">
+                            New expiry date
+                        </govuk-date-input-fieldset-legend>
+                        <govuk-date-input-hint>
+                            For example, @Model.NewExpiryDate.ToString("d M yyyy"). Must be in the future and no later than @Model.MaxAllowedExpiryDateHint.
+                        </govuk-date-input-hint>
+                    </govuk-date-input-fieldset>
+                </govuk-date-input>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Save expiry date</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

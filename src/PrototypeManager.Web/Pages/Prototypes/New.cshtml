@@ -1,0 +1,111 @@
+@page
+@model PrototypeManager.Web.Pages.Prototypes.NewModel
+@{
+    ViewData["Title"] = "Host prototype";
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Prototype hosting</p>
+            <h1 class="dfe-c-fe-title">Host prototype</h1>
+            <p class="dfe-c-fe-text">
+                Connect an existing GitHub repository to Azure hosting.
+                @if (!string.IsNullOrWhiteSpace(User.GetEmail()))
+                {
+                    <span class="dfe-c-fe-meta">Signed in as @User.GetEmail()</span>
+                }
+            </p>
+        </div>
+    </header>
+
+    <section class="dfe-c-fe-panel dfe-c-fe-panel--muted">
+        <div class="dfe-c-fe-panel__header">
+            <h2 class="dfe-c-fe-heading">Need a new GitHub repository?</h2>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                If you do not have a repository yet, use
+                <a class="govuk-link" href="@Url.Page("/Prototypes/Create")">Create a prototype</a> to set up a GitHub repo with the GOV.UK Prototype Kit first.
+            </p>
+        </div>
+    </section>
+
+    <section class="dfe-c-fe-panel dfe-c-fe-panel--muted">
+        <div class="dfe-c-fe-panel__header">
+            <h2 class="dfe-c-fe-heading">Prototype limitations</h2>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Prototype hosting is free, but limited: each app has around 1 hour of server processing time per day, which is used in small amounts each time someone loads a page or uses the prototype, so test locally where possible and use hosted prototypes mainly for user research and stakeholder conversations.
+            </p>
+        </div>
+    </section>
+
+    <div class="dfe-c-fe-panel">
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+                </div>
+            </div>
+        }
+
+        <form method="post" class="processing-trigger">
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="Input.GitHubRepositoryUrl"></label>
+                <span class="govuk-hint">
+                    Must be a repository in the dfe-digital enterprise space.
+                </span>
+                <span class="govuk-error-message" asp-validation-for="Input.GitHubRepositoryUrl"></span>
+                <input class="govuk-input"
+                       asp-for="Input.GitHubRepositoryUrl"
+                       autocomplete="off"
+                       spellcheck="false" />
+            </div>
+
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="Input.AppName"></label>
+                <span class="govuk-hint">Lowercase, use hyphens and do not include spaces. For example, ey-training or teacher-vacancies. You don't need to include "prototype" in the app name.</span>
+                <span class="govuk-error-message" asp-validation-for="Input.AppName"></span>
+                <input class="govuk-input govuk-input--width-20" asp-for="Input.AppName" maxlength="20" autocomplete="off" />
+            </div>
+
+            <govuk-password-input for="Input.PrototypePassword"
+                                  id="prototype-password"
+                                  autocomplete="new-password"
+                                  input-class="govuk-input--width-20">
+                <govuk-password-input-label asp-for="Input.PrototypePassword" />
+                <govuk-password-input-hint>All prototypes must be password protected. You'll be able to update this once your app is created. @PrototypePasswordRules.MinimumLength characters minimum.</govuk-password-input-hint>
+            </govuk-password-input>
+
+            @if (Model.AvailableBusinessAreas.Any())
+            {
+                <div class="govuk-form-group">
+                    <label class="govuk-label" asp-for="Input.BusinessAreaId">Business area</label>
+                    <span class="govuk-hint">Select the business area responsible for this prototype.</span>
+                    <span class="govuk-error-message" asp-validation-for="Input.BusinessAreaId"></span>
+                    <select class="govuk-select"
+                            asp-for="Input.BusinessAreaId"
+                            asp-items="@(new SelectList(Model.AvailableBusinessAreas, nameof(BusinessArea.Id), nameof(BusinessArea.Name), Model.Input.BusinessAreaId))">
+                        @if (Model.AvailableBusinessAreas.Count > 1)
+                        {
+                            <option value="">Select a business area</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <div class="govuk-form-group">
+                <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                    <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" asp-for="Input.DeclarationAgreed" />
+                        <label class="govuk-label govuk-checkboxes__label" asp-for="Input.DeclarationAgreed"></label>
+                    </div>
+                </div>
+                <span class="govuk-error-message" asp-validation-for="Input.DeclarationAgreed"></span>
+            </div>
+
+            <govuk-button>Host prototype</govuk-button>
+        </form>
+    </div>
+</div>

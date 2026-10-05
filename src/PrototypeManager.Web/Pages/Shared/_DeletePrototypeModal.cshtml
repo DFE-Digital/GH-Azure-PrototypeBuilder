@@ -1,0 +1,53 @@
+<dialog id="delete-prototype-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="delete-prototype-modal-title"
+        aria-describedby="delete-prototype-modal-description">
+    <div class="dfe-f-modal__panel">
+        <header class="dfe-f-modal__header">
+            <h2 class="govuk-heading-m dfe-f-modal__title" id="delete-prototype-modal-title">Delete prototype</h2>
+            <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+            </button>
+        </header>
+        <div class="dfe-f-modal__body" id="delete-prototype-modal-description">
+            <p class="govuk-body">
+                This will queue removal of the Azure hosting environment for
+                <strong id="delete-prototype-modal-name"></strong>.
+                <span id="delete-prototype-modal-github-note" hidden>
+                    The GitHub repository created for this prototype will also be deleted.
+                </span>
+                This action cannot be undone.
+            </p>
+            <p class="govuk-body">
+                To confirm, type the prototype app name <strong id="delete-prototype-modal-name-hint"></strong> below.
+            </p>
+            <div class="govuk-form-group" id="delete-prototype-modal-form-group">
+                <label class="govuk-label" for="delete-prototype-modal-input">Prototype app name</label>
+                <span class="govuk-error-message" id="delete-prototype-modal-error" hidden>
+                    Enter the prototype app name exactly to confirm deletion.
+                </span>
+                <input class="govuk-input govuk-input--width-20"
+                       id="delete-prototype-modal-input"
+                       name="ConfirmName"
+                       type="text"
+                       autocomplete="off"
+                       spellcheck="false"
+                       aria-describedby="delete-prototype-modal-error" />
+            </div>
+        </div>
+        <footer class="dfe-f-modal__footer">
+            <button type="submit"
+                    class="govuk-button govuk-button--warning"
+                    id="delete-prototype-modal-submit"
+                    disabled>
+                Delete prototype
+            </button>
+            <button type="button"
+                    class="govuk-button govuk-button--secondary"
+                    data-dfe-modal-close>
+                Cancel
+            </button>
+        </footer>
+    </div>
+</dialog>

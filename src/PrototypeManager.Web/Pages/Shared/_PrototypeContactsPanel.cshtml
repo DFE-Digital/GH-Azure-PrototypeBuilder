@@ -1,0 +1,234 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<section class="dfe-c-fe-panel">
+    <div class="dfe-c-fe-panel__header dfe-c-fe-panel__header--split">
+        <div>
+            <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Contacts</h2>
+            <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">Manage who can access and change this prototype.</p>
+        </div>
+        @if (Model.CanManageContacts)
+        {
+            <a class="govuk-link"
+               href="#"
+               role="button"
+               aria-controls="add-contact-modal">
+                Add contact
+            </a>
+        }
+    </div>
+
+    <table class="govuk-table dfe-c-fe-dashboard-table govuk-!-margin-bottom-0">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Name</th>
+                <th scope="col" class="govuk-table__header">Email</th>
+                <th scope="col" class="govuk-table__header">Role</th>
+                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@PrototypeContactPresentation.GetDisplayName(Model.Prototype!.OwnerEmail)</td>
+                <td class="govuk-table__cell">@Model.Prototype.OwnerEmail</td>
+                <td class="govuk-table__cell"><span class="dfe-c-fe-badge dfe-c-fe-badge--info">Owner</span></td>
+                <td class="govuk-table__cell">
+                    @if (Model.CanManageContacts && Model.CanTransferOwnership)
+                    {
+                        <a class="govuk-link dfe-f-manage-contact-open"
+                           href="#"
+                           role="button"
+                           data-contact-type="owner"
+                           data-contact-email="@Model.Prototype.OwnerEmail"
+                           data-contact-name="@PrototypeContactPresentation.GetDisplayName(Model.Prototype.OwnerEmail)">
+                            Manage
+                        </a>
+                    }
+                    else
+                    {
+                        <text>—</text>
+                    }
+                </td>
+            </tr>
+            @if (!string.IsNullOrWhiteSpace(Model.Prototype.DeputyOwnerEmail))
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@PrototypeContactPresentation.GetDisplayName(Model.Prototype.DeputyOwnerEmail)</td>
+                    <td class="govuk-table__cell">@Model.Prototype.DeputyOwnerEmail</td>
+                    <td class="govuk-table__cell"><span class="dfe-c-fe-badge dfe-c-fe-badge--muted">Member</span></td>
+                    <td class="govuk-table__cell">
+                        @if (Model.CanManageContacts)
+                        {
+                            <a class="govuk-link dfe-f-manage-contact-open"
+                               href="#"
+                               role="button"
+                               data-contact-type="deputy"
+                               data-contact-email="@Model.Prototype.DeputyOwnerEmail"
+                               data-contact-name="@PrototypeContactPresentation.GetDisplayName(Model.Prototype.DeputyOwnerEmail)">
+                                Manage
+                            </a>
+                        }
+                        else
+                        {
+                            <text>—</text>
+                        }
+                    </td>
+                </tr>
+            }
+            @foreach (var contact in Model.Contacts)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@PrototypeContactPresentation.GetDisplayName(contact.Email)</td>
+                    <td class="govuk-table__cell">@contact.Email</td>
+                    <td class="govuk-table__cell"><span class="dfe-c-fe-badge dfe-c-fe-badge--muted">Member</span></td>
+                    <td class="govuk-table__cell">
+                        @if (Model.CanManageContacts)
+                        {
+                            <a class="govuk-link dfe-f-manage-contact-open"
+                               href="#"
+                               role="button"
+                               data-contact-type="member"
+                               data-contact-id="@contact.Id"
+                               data-contact-email="@contact.Email"
+                               data-contact-name="@PrototypeContactPresentation.GetDisplayName(contact.Email)">
+                                Manage
+                            </a>
+                        }
+                        else
+                        {
+                            <text>—</text>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+@if (Model.CanManageContacts)
+{
+    <dialog id="add-contact-modal"
+            class="dfe-f-modal govuk-!-margin-0"
+            data-module="dfe-f-modal"
+            aria-labelledby="add-contact-modal-title"
+            aria-describedby="add-contact-modal-description">
+        <div class="dfe-f-modal__panel">
+            <form method="post" asp-page-handler="AddManager" asp-route-id="@Model.Prototype.Id">
+                <header class="dfe-f-modal__header">
+                    <h2 class="govuk-heading-m dfe-f-modal__title" id="add-contact-modal-title">Add contact</h2>
+                    <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                        <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                    </button>
+                </header>
+                <div class="dfe-f-modal__body" id="add-contact-modal-description">
+                    <p class="govuk-body">Add a member who can manage settings, extend expiry, and view the prototype password.</p>
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ManagerEmail)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
+                        <label class="govuk-label" for="managerEmail">Email address</label>
+                        <span class="govuk-hint">They will be added as a Member.</span>
+                        <span class="govuk-error-message" asp-validation-for="ManagerEmail"></span>
+                        <input class="govuk-input"
+                               id="managerEmail"
+                               asp-for="ManagerEmail"
+                               type="email"
+                               autocomplete="email"
+                               required />
+                    </div>
+                </div>
+                <footer class="dfe-f-modal__footer">
+                    <button type="submit" class="govuk-button">Add contact</button>
+                    <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+                </footer>
+            </form>
+        </div>
+    </dialog>
+
+    <dialog id="manage-contact-modal"
+            class="dfe-f-modal govuk-!-margin-0"
+            data-module="dfe-f-modal"
+            aria-labelledby="manage-contact-modal-title"
+            aria-describedby="manage-contact-modal-description">
+        <div class="dfe-f-modal__panel">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="manage-contact-modal-title">Manage contact</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="manage-contact-modal-description">
+                <p class="govuk-body" id="manage-contact-modal-email"></p>
+                <div id="manage-contact-owner-fields" hidden>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" for="manage-contact-new-owner-select">New owner</label>
+                        <span class="govuk-hint">Choose who should become owner. You will become a member.</span>
+                        <select class="govuk-select"
+                                id="manage-contact-new-owner-select"
+                                name="NewOwnerEmail"
+                                form="manage-contact-owner-form"
+                                required>
+                            <option value="">Select a contact</option>
+                            @foreach (var candidate in Model.OwnershipTransferCandidates)
+                            {
+                                <option value="@candidate.Email">@candidate.DisplayName (@candidate.Email)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <form id="manage-contact-transfer-form"
+                  method="post"
+                  asp-page-handler="TransferOwnership"
+                  asp-route-id="@Model.Prototype.Id"
+                  class="dfe-f-modal__footer-form">
+                <input type="hidden" name="NewOwnerEmail" id="manage-contact-transfer-email" />
+            </form>
+            <form id="manage-contact-remove-form"
+                  method="post"
+                  asp-page-handler="RemoveManager"
+                  asp-route-id="@Model.Prototype.Id"
+                  class="dfe-f-modal__footer-form">
+                <input type="hidden" name="contactId" id="manage-contact-remove-id" />
+            </form>
+            <form id="manage-contact-remove-deputy-form"
+                  method="post"
+                  asp-page-handler="RemoveDeputy"
+                  asp-route-id="@Model.Prototype.Id"
+                  class="dfe-f-modal__footer-form"></form>
+            <form id="manage-contact-owner-form"
+                  method="post"
+                  asp-page-handler="TransferOwnership"
+                  asp-route-id="@Model.Prototype.Id"
+                  class="dfe-f-modal__footer-form"></form>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit"
+                        class="govuk-button"
+                        id="manage-contact-make-owner-button"
+                        form="manage-contact-transfer-form"
+                        hidden>
+                    Make owner
+                </button>
+                <button type="submit"
+                        class="govuk-button govuk-button--warning"
+                        id="manage-contact-remove-button"
+                        form="manage-contact-remove-form"
+                        hidden>
+                    Remove
+                </button>
+                <button type="submit"
+                        class="govuk-button govuk-button--warning"
+                        id="manage-contact-remove-deputy-button"
+                        form="manage-contact-remove-deputy-form"
+                        hidden>
+                    Remove
+                </button>
+                <button type="submit"
+                        class="govuk-button"
+                        id="manage-contact-make-member-button"
+                        form="manage-contact-owner-form"
+                        hidden>
+                    Make member
+                </button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </div>
+    </dialog>
+}

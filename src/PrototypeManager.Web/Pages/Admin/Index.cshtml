@@ -1,0 +1,102 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Admin";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.DashboardSection;
+}
+
+<span class="govuk-caption-l">Administration</span>
+<h1 class="govuk-heading-l">Admin</h1>
+
+<div class="govuk-grid-row prototype-details-layout">
+    <div class="govuk-grid-column-one-third">
+        <partial name="_AdminNav" />
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
+        <h2 class="govuk-heading-m">@AdminNavigation.SectionTitle(AdminNavigation.DashboardSection)</h2>
+        <p class="govuk-body">Overview of prototypes, business areas and administrator access.</p>
+
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-half">
+                <h3 class="govuk-heading-s">Failed deployments</h3>
+                @if (!Model.FailedPrototypes.Any())
+                {
+                    <p class="govuk-body">There are no failed deployments.</p>
+                }
+                else
+                {
+                    <ul class="govuk-list govuk-list--bullet">
+                    @foreach (var prototype in Model.FailedPrototypes)
+                    {
+                        <li><a class="govuk-link" asp-page="/Prototypes/Details" asp-route-id="@prototype.Id">@prototype.Name</a></li>
+                    }
+                    </ul>
+                }
+            </div>
+            <div class="govuk-grid-column-one-half">
+                <h3 class="govuk-heading-s">Expiring soon</h3>
+                @if (!Model.ExpiringSoon.Any())
+                {
+                    <p class="govuk-body">No prototypes are expiring soon.</p>
+                }
+                else
+                {
+                    <ul class="govuk-list govuk-list--bullet">
+                    @foreach (var prototype in Model.ExpiringSoon)
+                    {
+                        <li>
+                            <a class="govuk-link" asp-page="/Prototypes/Details" asp-route-id="@prototype.Id">@prototype.Name</a>
+                            by @prototype.ExpiresAt.ToString("dd MMM yyyy")
+                        </li>
+                    }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <h3 class="govuk-heading-s govuk-!-margin-top-6">All prototypes</h3>
+        <p class="govuk-body">@Model.AllPrototypes.Count prototype records in the system.</p>
+
+        <h3 class="govuk-heading-s">Business areas</h3>
+        @if (!Model.BusinessAreas.Any())
+        {
+            <p class="govuk-body">There are no business areas yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Business area</th>
+                        <th scope="col" class="govuk-table__header">Prototype count</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var businessArea in Model.BusinessAreas)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@businessArea.Name</td>
+                        <td class="govuk-table__cell">@businessArea.PrototypeCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+
+        <h3 class="govuk-heading-s govuk-!-margin-top-6">Admins</h3>
+        @if (!Model.Users.Any(user => user.IsAdmin))
+        {
+            <p class="govuk-body">There are no application admins configured.</p>
+        }
+        else
+        {
+            <ul class="govuk-list govuk-list--bullet">
+            @foreach (var user in Model.Users.Where(user => user.IsAdmin))
+            {
+                <li>@user.Email</li>
+            }
+            </ul>
+        }
+    </div>
+</div>

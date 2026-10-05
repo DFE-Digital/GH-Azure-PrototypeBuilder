@@ -1,0 +1,35 @@
+@page
+@model PrototypeManager.Web.Pages.Prototypes.OwnerModel
+@{
+    ViewData["Title"] = "Change owner";
+}
+
+@section BeforeContent {
+    @if (Model.Prototype is not null)
+    {
+        <govuk-back-link href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id, section = DetailsModel.PrototypeSection })">Back to prototype</govuk-back-link>
+    }
+}
+
+@if (Model.Prototype is null)
+{
+    <p class="govuk-body">Prototype not found.</p>
+    return;
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <span class="govuk-caption-l">@Model.Prototype.Name</span>
+        <h1 class="govuk-heading-l">Change owner</h1>
+
+        <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Current owner</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.OwnerEmail</dd>
+            </div>
+        </dl>
+
+        <p class="govuk-body">Owner changes will be managed from the Contacts section. Use Contacts to add deputy owners and other contacts for now.</p>
+        <a class="govuk-link" href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id, section = DetailsModel.ContactsSection })">Go to contacts</a>
+    </div>
+</div>

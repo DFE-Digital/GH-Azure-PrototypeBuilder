@@ -1,0 +1,197 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<div class="dfe-c-fe-dashboard">
+    <div class="dfe-c-fe-dashboard__metrics">
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Hosting status</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="@ListModel.GetStatusBadgeClass(Model.Prototype!.Status)">
+                    @ListModel.GetStatusLabel(Model.Prototype.Status)
+                </span>
+            </p>
+        </section>
+
+        @if (Model.Prototype.Status == PrototypeStatus.Live && !string.IsNullOrWhiteSpace(Model.Prototype.AzureWebAppName))
+        {
+            <section class="dfe-c-fe-panel dfe-c-fe-metric">
+                <h2 class="dfe-c-fe-metric__label">App status</h2>
+                <p class="dfe-c-fe-metric__value">
+                    <span class="@DetailsModel.GetRuntimeBadgeClass(Model.WebAppRuntime.PowerState)">
+                        @Model.WebAppRuntime.Label
+                    </span>
+                </p>
+                @if (Model.CanManage && Model.WebAppRuntime.CanStop)
+                {
+                    <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="stop-app-modal">
+                            Stop app
+                        </a>
+                    </p>
+                }
+                else if (Model.CanManage && Model.WebAppRuntime.CanStart)
+                {
+                    <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="start-app-modal">
+                            Start app
+                        </a>
+                    </p>
+                }
+            </section>
+        }
+
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Expires</h2>
+            <p class="dfe-c-fe-metric__value">@Model.Prototype.ExpiresAt.ToString("dd MMM yyyy")</p>
+            @if (Model.CanManage)
+            {
+                <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                    <a class="govuk-link"
+                       href="#"
+                       role="button"
+                       aria-controls="change-expiry-modal">
+                        Change<span class="govuk-visually-hidden"> expiry</span>
+                    </a>
+                </p>
+            }
+        </section>
+
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Stack</h2>
+            <p class="dfe-c-fe-metric__value">@DetailsModel.FormatStackSummary(Model.Prototype)</p>
+        </section>
+    </div>
+
+    <section class="dfe-c-fe-panel">
+        <div class="dfe-c-fe-panel__header dfe-c-fe-panel__header--split">
+            <div>
+                <h2 class="dfe-c-fe-heading">Deployment history</h2>
+                <p class="dfe-c-fe-text">Recent provisioning and deployment jobs for this prototype.</p>
+            </div>
+            <a class="dfe-c-fe-link" href="@Model.SectionUrl(DetailsModel.HistorySection)">View all activity</a>
+        </div>
+
+        @if (!Model.RecentJobs.Any())
+        {
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">No deployment jobs have been recorded yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table dfe-c-fe-dashboard-table govuk-!-margin-bottom-0">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Job</th>
+                        <th scope="col" class="govuk-table__header">Status</th>
+                        <th scope="col" class="govuk-table__header">Completed</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var job in Model.RecentJobs)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@DetailsModel.GetJobTypeLabel(job.Type)</td>
+                        <td class="govuk-table__cell">
+                            <span class="@DetailsModel.GetJobStatusClass(job.Status)">@job.Status</span>
+                        </td>
+                        <td class="govuk-table__cell">@(job.CompletedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="dfe-c-fe-panel">
+        <div class="dfe-c-fe-panel__header">
+            <div>
+                <h2 class="dfe-c-fe-heading">App details</h2>
+                <p class="dfe-c-fe-text">Core information for this hosting environment.</p>
+            </div>
+        </div>
+
+        <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Prototype app name</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.Name</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Project</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.ServiceName</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Business area</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.BusinessArea?.Name</dd>
+                @if (Model.CanManage && Model.AvailableBusinessAreas.Any())
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="change-business-area-modal">
+                            Change<span class="govuk-visually-hidden"> business area</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Owner</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.OwnerEmail</dd>
+                @if (Model.CanManageContacts)
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link" href="@Model.SectionUrl(DetailsModel.ContactsSection)">
+                            Manage<span class="govuk-visually-hidden"> contacts</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Expiry date</dt>
+                <dd class="govuk-summary-list__value">@Model.Prototype.ExpiresAt.ToString("dd MMM yyyy")</dd>
+                @if (Model.CanManage)
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="change-expiry-modal">
+                            Change<span class="govuk-visually-hidden"> expiry date</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Prototype password</dt>
+                <dd class="govuk-summary-list__value">
+                    <code id="prototype-password-value" class="dfe-c-fe-password-field__value">
+                        @if (Model.CanViewPassword)
+                        {
+                            @(string.IsNullOrWhiteSpace(Model.RevealedPassword) ? "Not set" : Model.RevealedPassword)
+                        }
+                        else
+                        {
+                            @:Restricted
+                        }
+                    </code>
+                </dd>
+                @if (Model.CanManage)
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="change-password-modal">
+                            Change<span class="govuk-visually-hidden"> prototype password</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+        </dl>
+    </section>
+</div>

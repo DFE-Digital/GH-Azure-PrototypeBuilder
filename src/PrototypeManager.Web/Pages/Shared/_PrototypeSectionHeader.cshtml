@@ -1,0 +1,12 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model (PrototypeManager.Web.Pages.Prototypes.DetailsModel Page, string Title, string? Description)
+
+<div class="dfe-c-fe-section-intro">
+    <div class="dfe-c-fe-section-intro__content">
+        <h2 class="dfe-c-fe-section-intro__title govuk-heading-m govuk-!-margin-bottom-1">@Model.Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Model.Description))
+        {
+            <p class="dfe-c-fe-section-intro__description govuk-body govuk-!-margin-bottom-0">@Model.Description</p>
+        }
+    </div>
+</div>

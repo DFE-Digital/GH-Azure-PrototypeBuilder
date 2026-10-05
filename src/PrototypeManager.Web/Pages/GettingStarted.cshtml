@@ -1,0 +1,82 @@
+@page
+@model GettingStartedModel
+@{
+    ViewData["Title"] = "How to use Prototype Manager";
+}
+
+@section BeforeContent {
+    <govuk-back-link href="@Url.Page("/Index")">Back to dashboard</govuk-back-link>
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <span class="govuk-caption-l">Getting started</span>
+        <h1 class="govuk-heading-l">How to use Prototype Manager</h1>
+        <p class="govuk-body-l">
+            Host GOV.UK Prototype Kit and DfE Frontend prototypes in Azure without needing access to the Azure portal.
+        </p>
+
+        <h2 class="govuk-heading-m">What this service does</h2>
+        <p class="govuk-body">
+            Prototype Manager sets up and runs password-protected hosting environments for your prototypes.
+            You keep your code in GitHub; we handle the Azure infrastructure, cost controls, and deployment setup.
+        </p>
+        <ul class="govuk-list govuk-list--bullet">
+            <li>provisions approved, cost-controlled Azure hosting for each prototype</li>
+            <li>connects to your GitHub repository for automatic deployments</li>
+            <li>gives you a live URL you can share with stakeholders</li>
+            <li>lets you manage owners, passwords, and expiry dates in one place</li>
+        </ul>
+
+        <h2 class="govuk-heading-m govuk-!-margin-top-6">Get your prototype live in 4 steps</h2>
+
+        <ol class="govuk-list getting-started-steps">
+            <li>
+                <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Put your prototype code in GitHub</h3>
+                <p class="govuk-body">
+                    Use <a class="govuk-link" href="@Url.Page("/Prototypes/Create")">Create a prototype</a> to create a GitHub repository with the GOV.UK Prototype Kit,
+                    or use a repository you already have with your prototype code on the <code>main</code> branch.
+                </p>
+            </li>
+            <li>
+                <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Create a prototype in this app</h3>
+                <p class="govuk-body">
+                    Select <a class="govuk-link" href="@Url.Page("/Prototypes/Create")">Create a prototype</a> if you need a new GitHub repository with the GOV.UK Prototype Kit.
+                    Select <a class="govuk-link" href="@Url.Page("/Prototypes/New")">Host prototype</a> if your code is already in GitHub.
+                </p>
+                <p class="govuk-body">
+                    Prototype Manager will queue the work to set up your Azure hosting environment. You can watch progress from the setup page.
+                </p>
+            </li>
+            <li>
+                <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Connect GitHub and deploy</h3>
+                <p class="govuk-body">
+                    When hosting is ready, open your prototype and go to the <strong>GitHub</strong> tab.
+                    Prototype Manager can add a deployment workflow to your repository and run the first deploy for you.
+                    You can also copy the workflow manually if you prefer.
+                </p>
+                <p class="govuk-body">
+                    After that, pushing changes to <code>main</code> will deploy your prototype automatically.
+                </p>
+            </li>
+            <li>
+                <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Manage it from your dashboard</h3>
+                <p class="govuk-body">
+                    Use the dashboard and prototype details pages to view your live URL, change the password, update the owner or expiry date,
+                    extend or archive the prototype, and check deployment history.
+                </p>
+            </li>
+        </ol>
+
+        <div class="govuk-inset-text govuk-!-margin-top-6">
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                You do not need Azure portal access. Prototype Manager only creates approved resource types in approved regions with cost controls applied.
+            </p>
+        </div>
+
+        <div class="govuk-button-group govuk-!-margin-top-6">
+            <govuk-button-link href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-button-link>
+            <govuk-button-link href="@Url.Page("/Prototypes/New")" class="govuk-button--secondary">Host prototype</govuk-button-link>
+        </div>
+    </div>
+</div>

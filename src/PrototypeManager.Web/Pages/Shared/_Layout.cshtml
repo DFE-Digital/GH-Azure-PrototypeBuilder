@@ -1,0 +1,70 @@
+﻿@{
+    Layout = "_GovUkPageTemplate";
+    ViewData["Title"] ??= "Prototype Manager";
+    ViewData["ServiceName"] = "Prototype Manager";
+    ViewData["ServiceUrl"] = Url.Page("/Index");
+}
+
+@section Head {
+    @Html.GovUkFrontendStyleImports()
+    <link rel="stylesheet" href="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe.min.css" asp-append-version="true" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+}
+
+@section GovUkHeader {
+    <govuk-header home-page-url="https://www.gov.uk/" />
+}
+
+@section GovUkServiceNavigation {
+    <govuk-service-navigation service-name="Prototype Manager" service-url="@Url.Page("/Index")">
+        <govuk-service-navigation-nav>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Index")">Dashboard</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Live")">Live</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/List")">Prototypes</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/New")">Host prototype</govuk-service-navigation-nav-item>
+            @if (User.IsAdmin())
+            {
+                <govuk-service-navigation-nav-item href="@Url.Page("/Admin/Index")">Admin</govuk-service-navigation-nav-item>
+            }
+        </govuk-service-navigation-nav>
+    </govuk-service-navigation>
+}
+
+@section BeforeContent {
+    @await RenderSectionAsync("BeforeContent", required: false)
+}
+
+@RenderBody()
+
+@section GovUkFooter {
+    <govuk-footer>
+        <govuk-footer-meta>
+            <govuk-footer-meta-items>
+                <govuk-footer-meta-item href="@Url.Page("/Index")">Prototype Manager</govuk-footer-meta-item>
+                <govuk-footer-meta-item href="@Url.Page("/Prototypes/List")">All prototypes</govuk-footer-meta-item>
+                <govuk-footer-meta-item href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-footer-meta-item>
+                <govuk-footer-meta-item href="@Url.Page("/Prototypes/New")">Host prototype</govuk-footer-meta-item>
+                <govuk-footer-meta-item href="@Url.Page("/GettingStarted")">How to use Prototype Manager</govuk-footer-meta-item>
+            </govuk-footer-meta-items>
+        </govuk-footer-meta>
+        <govuk-footer-content-licence />
+        <govuk-footer-copyright />
+    </govuk-footer>
+}
+
+@section BodyEnd {
+    @await Html.PartialAsync("_ProcessingModal")
+    <script defer src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-frontend.iife.min.js" asp-append-version="true"></script>
+    <script>
+        window.addEventListener("DOMContentLoaded", function () {
+            if (window.DfeFrontend?.initAll) {
+                window.DfeFrontend.initAll();
+            }
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+}

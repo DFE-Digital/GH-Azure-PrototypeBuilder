@@ -1,0 +1,116 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.UsersModel
+@{
+    ViewData["Title"] = "Manage access";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.UsersSection;
+}
+
+<span class="govuk-caption-l">Administration</span>
+<h1 class="govuk-heading-l">Admin</h1>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+<div class="govuk-grid-row prototype-details-layout">
+    <div class="govuk-grid-column-one-third">
+        <partial name="_AdminNav" />
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
+        <h2 class="govuk-heading-m">@AdminNavigation.SectionTitle(AdminNavigation.UsersSection)</h2>
+        <p class="govuk-body">
+            Add a person, make them an admin, and assign them to one or more business areas. Submitting an existing email updates that person’s access.
+        </p>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+                </div>
+            </div>
+        }
+
+        <form method="post" class="prototype-action-form">
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="Input.Email"></label>
+                <span class="govuk-error-message" asp-validation-for="Input.Email"></span>
+                <input class="govuk-input" asp-for="Input.Email" />
+            </div>
+
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="Input.DisplayName"></label>
+                <input class="govuk-input" asp-for="Input.DisplayName" />
+            </div>
+
+            <div class="govuk-form-group">
+                <div class="govuk-checkboxes">
+                    <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" asp-for="Input.IsAdmin" />
+                        <label class="govuk-label govuk-checkboxes__label" asp-for="Input.IsAdmin"></label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        Business areas
+                    </legend>
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        @foreach (var businessArea in Model.BusinessAreas)
+                        {
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input"
+                                       id="business-area-@businessArea.Id"
+                                       name="Input.BusinessAreaIds"
+                                       type="checkbox"
+                                       value="@businessArea.Id"
+                                       @(Model.Input.BusinessAreaIds.Contains(businessArea.Id) ? "checked" : null) />
+                                <label class="govuk-label govuk-checkboxes__label" for="business-area-@businessArea.Id">
+                                    @businessArea.Name
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </fieldset>
+            </div>
+
+            <govuk-button>Save access</govuk-button>
+        </form>
+
+        <h3 class="govuk-heading-s govuk-!-margin-top-6">Current access</h3>
+        @if (!Model.Users.Any())
+        {
+            <p class="govuk-body">No user access records have been created yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Email</th>
+                        <th scope="col" class="govuk-table__header">Admin</th>
+                        <th scope="col" class="govuk-table__header">Business areas</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var user in Model.Users)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@user.Email</td>
+                        <td class="govuk-table__cell">@(user.IsAdmin ? "Yes" : "No")</td>
+                        <td class="govuk-table__cell">@string.Join(", ", user.BusinessAreaNames)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

@@ -1,0 +1,41 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="change-business-area-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="change-business-area-modal-title"
+        aria-describedby="change-business-area-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="UpdateBusinessArea" asp-route-id="@Model.Prototype!.Id">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="change-business-area-modal-title">Change business area</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="change-business-area-modal-description">
+                <p class="govuk-body">Select the business area this prototype belongs to.</p>
+                <div class="govuk-form-group">
+                    <label class="govuk-label" for="businessAreaId">Business area</label>
+                    <select class="govuk-select" id="businessAreaId" name="BusinessAreaId" required>
+                        @foreach (var area in Model.AvailableBusinessAreas)
+                        {
+                            @if (Model.Prototype!.BusinessAreaId == area.Id)
+                            {
+                                <option value="@area.Id" selected="selected">@area.Name</option>
+                            }
+                            else
+                            {
+                                <option value="@area.Id">@area.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Save business area</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

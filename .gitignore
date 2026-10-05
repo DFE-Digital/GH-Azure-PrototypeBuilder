@@ -1,0 +1,78 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.dll
+*.exe
+*.pdb
+*.cache
+project.lock.json
+project.fragment.lock.json
+
+# .NET / NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+*.nuget.props
+*.nuget.targets
+
+# Secrets & local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+secrets.json
+**/secrets/
+**/appsettings.json
+**/appsettings.Development.json
+**/appsettings.*.local.json
+**/appsettings.Local.json
+!**/appsettings.example.json
+!**/appsettings.Development.example.json
+**/local.settings.json
+**/ConnectionStrings.local.json
+
+# User-specific / IDE
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+.vs/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local databases & logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+logs/
+
+# Test / coverage
+TestResults/
+[Cc]overage/
+*.coverage
+*.coveragexml
+
+# Azure / tooling
+.azure/
+*.publishsettings
+publish/
+
+# Rider / VS Code local overrides
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example

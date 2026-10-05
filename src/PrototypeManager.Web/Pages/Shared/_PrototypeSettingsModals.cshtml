@@ -1,0 +1,118 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="add-config-var-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="add-config-var-modal-title"
+        aria-describedby="add-config-var-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="SetConfigVar" asp-route-id="@Model.Prototype!.Id">
+            <input type="hidden" name="Section" value="@DetailsModel.SettingsSection" />
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="add-config-var-modal-title">Add app setting</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="add-config-var-modal-description">
+                <p class="govuk-body">Add an environment variable for the hosted prototype app.</p>
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ConfigVarKey)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
+                    <label class="govuk-label" for="ConfigVarKey">Key</label>
+                    <span class="govuk-hint">Start with a letter. Use letters, numbers and underscores only.</span>
+                    <span class="govuk-error-message" asp-validation-for="ConfigVarKey"></span>
+                    <input class="govuk-input"
+                           id="ConfigVarKey"
+                           asp-for="ConfigVarKey"
+                           autocomplete="off"
+                           spellcheck="false"
+                           maxlength="@PrototypeAppSettingCatalog.MaxKeyLength"
+                           pattern="[A-Za-z][A-Za-z0-9_]*"
+                           required />
+                </div>
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ConfigVarValue)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
+                    <label class="govuk-label" for="ConfigVarValue">Value</label>
+                    <span class="govuk-hint">Up to @PrototypeAppSettingCatalog.MaxValueLength characters.</span>
+                    <span class="govuk-error-message" asp-validation-for="ConfigVarValue"></span>
+                    <input class="govuk-input"
+                           id="ConfigVarValue"
+                           asp-for="ConfigVarValue"
+                           type="text"
+                           autocomplete="off"
+                           maxlength="@PrototypeAppSettingCatalog.MaxValueLength"
+                           required />
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Add app setting</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="manage-config-var-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="manage-config-var-modal-title"
+        aria-describedby="manage-config-var-modal-description">
+    <div class="dfe-f-modal__panel">
+        <header class="dfe-f-modal__header">
+            <h2 class="govuk-heading-m dfe-f-modal__title" id="manage-config-var-modal-title">Manage app setting</h2>
+            <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+            </button>
+        </header>
+        <div class="dfe-f-modal__body" id="manage-config-var-modal-description">
+            <p class="govuk-body">
+                Key: <code id="manage-config-var-key-display"></code>
+            </p>
+            <form method="post"
+                  asp-page-handler="SetConfigVar"
+                  asp-route-id="@Model.Prototype.Id"
+                  id="manage-config-var-update-form">
+                <input type="hidden" name="Section" value="@DetailsModel.SettingsSection" />
+                <input type="hidden" name="ConfigVarKey" id="manage-config-var-key" />
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ConfigVarValue)]?.Errors.Count > 0 && !string.IsNullOrWhiteSpace(Model.ConfigVarKey) ? "govuk-form-group--error" : string.Empty)">
+                    <label class="govuk-label" for="manage-config-var-value">Value</label>
+                    <span class="govuk-hint" id="manage-config-var-value-hint">Up to @PrototypeAppSettingCatalog.MaxValueLength characters.</span>
+                    @if (ViewData.ModelState[nameof(Model.ConfigVarValue)]?.Errors.Count > 0 && !string.IsNullOrWhiteSpace(Model.ConfigVarKey))
+                    {
+                        <span class="govuk-error-message">@ViewData.ModelState[nameof(Model.ConfigVarValue)]!.Errors[0].ErrorMessage</span>
+                    }
+                    <input class="govuk-input"
+                           id="manage-config-var-value"
+                           name="ConfigVarValue"
+                           value="@(string.IsNullOrWhiteSpace(Model.ConfigVarKey) ? string.Empty : Model.ConfigVarValue)"
+                           type="text"
+                           autocomplete="off"
+                           maxlength="@PrototypeAppSettingCatalog.MaxValueLength"
+                           required />
+                </div>
+            </form>
+            <form method="post"
+                  asp-page-handler="RemoveConfigVar"
+                  asp-route-id="@Model.Prototype.Id"
+                  id="manage-config-var-remove-form"
+                  class="dfe-f-modal__footer-form">
+                <input type="hidden" name="Section" value="@DetailsModel.SettingsSection" />
+                <input type="hidden" name="key" id="manage-config-var-remove-key" />
+            </form>
+        </div>
+        <footer class="dfe-f-modal__footer">
+            <button type="submit"
+                    class="govuk-button"
+                    form="manage-config-var-update-form">
+                Save changes
+            </button>
+            <button type="submit"
+                    class="govuk-button govuk-button--warning"
+                    form="manage-config-var-remove-form"
+                    id="manage-config-var-remove-button"
+                    hidden>
+                Remove
+            </button>
+            <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+        </footer>
+    </div>
+</dialog>

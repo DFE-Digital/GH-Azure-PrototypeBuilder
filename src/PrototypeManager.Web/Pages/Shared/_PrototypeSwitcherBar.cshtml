@@ -1,0 +1,77 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+@if (Model.SwitchablePrototypes.Any())
+{
+    var prototypeCount = Model.SwitchablePrototypes.Count;
+    var currentPrototype = Model.Prototype!;
+
+    <div class="dfe-c-fe-prototype-bar" aria-label="Your prototypes">
+        @if (prototypeCount > 1)
+        {
+            <details class="dfe-c-fe-prototype-switch dfe-c-fe-prototype-bar__switch" id="prototype-app-switch">
+                <summary class="dfe-c-fe-prototype-switch__trigger">
+                    <span class="dfe-c-fe-prototype-switch__trigger-text">
+                        <span class="dfe-c-fe-prototype-switch__trigger-label">Prototype</span>
+                        <span class="dfe-c-fe-prototype-switch__trigger-value">@currentPrototype.Name</span>
+                    </span>
+                    <span class="dfe-c-fe-prototype-switch__chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="dfe-c-fe-prototype-switch__menu dfe-c-fe-prototype-bar__panel">
+                    <ul class="dfe-c-fe-prototype-switch__list" aria-label="Switch prototype">
+                        @foreach (var prototype in Model.SwitchablePrototypes)
+                        {
+                            var isCurrent = prototype.Id == currentPrototype.Id;
+
+                            <li class="dfe-c-fe-prototype-switch__item@(isCurrent ? " dfe-c-fe-prototype-switch__item--current" : string.Empty)">
+                                @if (isCurrent)
+                                {
+                                    <span class="dfe-c-fe-prototype-switch__option dfe-c-fe-prototype-switch__option--current" aria-current="page">
+                                        <span class="dfe-c-fe-prototype-switch__option-main">
+                                            <span class="dfe-c-fe-prototype-switch__name">@prototype.Name</span>
+                                            <span class="dfe-c-fe-prototype-switch__meta">
+                                                @(prototype.BusinessArea?.Name ?? "No business area")
+                                            </span>
+                                        </span>
+                                        <span class="@ListModel.GetStatusBadgeClass(prototype.Status)">
+                                            @ListModel.GetStatusLabel(prototype.Status)
+                                        </span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <a class="dfe-c-fe-prototype-switch__option"
+                                       href="@Model.PrototypeDetailsUrl(prototype.Id)">
+                                        <span class="dfe-c-fe-prototype-switch__option-main">
+                                            <span class="dfe-c-fe-prototype-switch__name">@prototype.Name</span>
+                                            <span class="dfe-c-fe-prototype-switch__meta">
+                                                @(prototype.BusinessArea?.Name ?? "No business area")
+                                            </span>
+                                        </span>
+                                        <span class="@ListModel.GetStatusBadgeClass(prototype.Status)">
+                                            @ListModel.GetStatusLabel(prototype.Status)
+                                        </span>
+                                    </a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </details>
+        }
+        else
+        {
+            <p class="dfe-c-fe-prototype-bar__current govuk-!-margin-bottom-0">
+                <span class="dfe-c-fe-prototype-switch__trigger-label">Prototype</span>
+                <span class="dfe-c-fe-prototype-bar__current-name">@currentPrototype.Name</span>
+                <span class="@ListModel.GetStatusBadgeClass(currentPrototype.Status)">
+                    @ListModel.GetStatusLabel(currentPrototype.Status)
+                </span>
+            </p>
+        }
+
+        <a class="govuk-link dfe-c-fe-prototype-bar__browse" asp-page="/Prototypes/List">
+            Browse all prototypes
+        </a>
+    </div>
+}

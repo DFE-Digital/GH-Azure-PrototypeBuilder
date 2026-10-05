@@ -1,0 +1,28 @@
+@page
+@model PrototypeManager.Web.Pages.Prototypes.OpenModel
+@{
+    ViewData["Title"] = $"Opening {Model.Prototype?.Name}";
+    Layout = "_LayoutMinimal";
+}
+
+@section BeforeContent {
+    <govuk-back-link asp-page="/Prototypes/Details" asp-route-id="@Model.Prototype!.Id">Back to prototype</govuk-back-link>
+}
+
+<div class="dfe-c-fe-shell dfe-c-fe-shell--centered">
+    <div class="dfe-c-fe-startup" id="prototype-startup"
+         data-ready-url="@Url.Page("/Prototypes/Open", "ReadyCheck", new { id = Model.Prototype!.Id })"
+         data-redirect-url="@Model.Prototype!.PrototypeUrl"
+         data-prototype-name="@Model.Prototype.Name">
+        <div class="dfe-c-fe-startup__spinner" aria-hidden="true"></div>
+        <h1 class="dfe-c-fe-title dfe-c-fe-startup__title">Starting your prototype</h1>
+        <p class="dfe-c-fe-text dfe-c-fe-startup__message" id="prototype-startup-message">
+            Waking <strong>@Model.Prototype.Name</strong>. This can take up to a minute if the app has been idle.
+        </p>
+        <p class="dfe-c-fe-meta" id="prototype-startup-state" aria-live="polite"></p>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/prototype-open.js" asp-append-version="true"></script>
+}

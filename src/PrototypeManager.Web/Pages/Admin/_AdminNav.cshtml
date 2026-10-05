@@ -1,0 +1,20 @@
+@{
+    var activeSection = ViewData[AdminNavigation.SectionViewDataKey] as string ?? AdminNavigation.DashboardSection;
+}
+
+<nav class="prototype-side-nav" aria-label="Admin sections">
+    <ul class="prototype-side-nav__list">
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.DashboardSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.DashboardSection)">Dashboard</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.UsersSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.UsersSection)">Manage access</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.GitHubOrganisationsSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.GitHubOrganisationsSection)">GitHub organisations</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.ExceptionsSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.ExceptionsSection)">Exception requests</a>
+        </li>
+    </ul>
+</nav>

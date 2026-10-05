@@ -1,0 +1,81 @@
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<section class="dfe-c-fe-panel">
+    <div class="dfe-c-fe-panel__header">
+        <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Recent activity</h2>
+        <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+            Setup, deployment, configuration, and management events for this prototype.
+        </p>
+    </div>
+
+    @if (!Model.ActivityItems.Any())
+    {
+        <p class="dfe-c-fe-text govuk-!-margin-bottom-0">No activity has been recorded yet.</p>
+    }
+    else
+    {
+        <ol class="activity-feed govuk-!-margin-bottom-0">
+            @foreach (var item in Model.ActivityItems)
+            {
+                <li class="activity-feed__item @DetailsModel.GetActivityItemClass(item.Status)">
+                    <div class="activity-feed__marker" aria-hidden="true"></div>
+                    <article class="activity-feed__content">
+                        <div class="activity-feed__header">
+                            <h3 class="activity-feed__title">@item.Action</h3>
+                            <span class="@DetailsModel.GetActivityStatusBadgeClass(item.Status)">
+                                @DetailsModel.GetActivityStatusLabel(item.Status)
+                            </span>
+                        </div>
+
+                        <p class="activity-feed__meta">
+                            <time datetime="@item.OccurredAt.ToString("O")">
+                                @item.OccurredAt.ToString("dd MMM yyyy, HH:mm")
+                            </time>
+                            <span class="activity-feed__meta-separator" aria-hidden="true">·</span>
+                            <span>@DetailsModel.FormatActivityActor(item.ActorEmail)</span>
+                            @if (item.IsJob && item.Attempt is > 1)
+                            {
+                                <span class="activity-feed__meta-separator" aria-hidden="true">·</span>
+                                <span>Attempt @item.Attempt</span>
+                            }
+                        </p>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Summary))
+                        {
+                            <p class="activity-feed__summary">@item.Summary</p>
+                        }
+
+                        @if (item.HasLogs)
+                        {
+                            <button type="button"
+                                    class="govuk-link activity-feed__logs-link dfe-f-activity-log-open"
+                                    data-activity-title="@item.Action"
+                                    data-activity-logs="@Uri.EscapeDataString(item.LogDetails)">
+                                View details
+                            </button>
+                        }
+                    </article>
+                </li>
+            }
+        </ol>
+    }
+</section>
+
+<dialog id="activity-log-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="activity-log-modal-title"
+        aria-describedby="activity-log-modal-description">
+    <div class="dfe-f-modal__panel">
+        <header class="dfe-f-modal__header">
+            <h2 class="govuk-heading-m dfe-f-modal__title" id="activity-log-modal-title">Activity details</h2>
+            <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+            </button>
+        </header>
+        <div class="dfe-f-modal__body" id="activity-log-modal-description">
+            <pre class="dfe-c-fe-log-viewer" id="activity-log-modal-content"></pre>
+        </div>
+    </div>
+</dialog>

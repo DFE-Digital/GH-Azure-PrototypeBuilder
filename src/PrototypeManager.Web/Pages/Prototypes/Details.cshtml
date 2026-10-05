@@ -1,0 +1,230 @@
+@page
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+@{
+    ViewData["Title"] = Model.Prototype?.Name ?? "Prototype details";
+}
+
+@if (Model.Prototype is null)
+{
+    <p class="govuk-body">Prototype not found.</p>
+    return;
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+<div class="dfe-c-fe-shell">
+
+@await Html.PartialAsync("_PrototypeSwitcherBar")
+
+@await Html.PartialAsync("_PrototypeAppHeader")
+
+<nav class="dfe-c-fe-tabs" id="prototype-section-tabs" aria-label="Prototype sections">
+    <ul class="dfe-c-fe-tabs__list">
+        @foreach (var section in new[] { DetailsModel.PrototypeSection, DetailsModel.GithubSecuritySection, DetailsModel.ContactsSection, DetailsModel.HistorySection, DetailsModel.SettingsSection })
+        {
+            <li class="dfe-c-fe-tabs__item @(Model.ActiveSection == section ? "dfe-c-fe-tabs__item--active" : string.Empty)">
+                <a class="dfe-c-fe-tabs__link" href="@Model.SectionUrl(section)">@Model.TabLabel(section)</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+<div class="dfe-c-fe-tab-content">
+        @await Html.PartialAsync("_PrototypeSectionHeader", (Model, Model.TabLabel(Model.ActiveSection), Model.SectionDescription(Model.ActiveSection)))
+
+        @switch (Model.ActiveSection)
+        {
+            case DetailsModel.PrototypeSection:
+                @await Html.PartialAsync("_PrototypeOverview")
+                break;
+
+            case DetailsModel.GithubSecuritySection:
+                <section class="dfe-c-fe-panel govuk-!-margin-bottom-6">
+                    <div class="dfe-c-fe-panel__header">
+                        <div>
+                            <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Repository and hosting</h2>
+                            <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                                GitHub repository and Azure resources for this prototype.
+                            </p>
+                        </div>
+                    </div>
+                    <dl class="govuk-summary-list govuk-!-margin-bottom-0">
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Repository</dt>
+                            <dd class="govuk-summary-list__value">
+                                <a class="govuk-link" href="@Model.Prototype.GitHubRepositoryUrl">@Model.Prototype.GitHubRepositoryUrl</a>
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Azure resource group</dt>
+                            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Prototype.AzureResourceGroupName) ? "Not provisioned yet" : Model.Prototype.AzureResourceGroupName)</dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Azure web app</dt>
+                            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Prototype.AzureWebAppName) ? "Not provisioned yet" : Model.Prototype.AzureWebAppName)</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section class="dfe-c-fe-panel">
+                    <div class="dfe-c-fe-panel__header">
+                        <div>
+                            <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Automated deployment</h2>
+                            <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                                @if (Model.GitHubAutoConfigureEnabled)
+                                {
+                                    <text>When Azure hosting is ready, Prototype Manager can commit a GitHub Actions workflow, save the Azure publish profile as a repository secret, and trigger the first deployment automatically.</text>
+                                }
+                                else
+                                {
+                                    <text>Automatic GitHub configuration is disabled. Queue configuration when you are ready.</text>
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (!Model.GitHubTokenConfigured)
+                    {
+                        <govuk-warning-text class="govuk-!-margin-top-4">
+                            GitHub deployment automation needs a personal access token. Set <code>GitHub:PersonalAccessToken</code> in <code>appsettings.json</code> or user secrets, then restart the app. In Development, do not leave an empty token in <code>appsettings.Development.json</code> as it overrides the base setting.
+                        </govuk-warning-text>
+                    }
+
+                    @if (Model.LatestGitHubDeploymentJob is not null)
+                    {
+                        <dl class="govuk-summary-list @(Model.CanConfigureGitHub ? "govuk-!-margin-bottom-4" : "govuk-!-margin-bottom-0")">
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Deployment configuration</dt>
+                                <dd class="govuk-summary-list__value">
+                                    <span class="@DetailsModel.GetJobStatusClass(Model.LatestGitHubDeploymentJob.Status)">
+                                        @DetailsModel.GetJobStatusLabel(Model.LatestGitHubDeploymentJob.Status)
+                                    </span>
+                                </dd>
+                            </div>
+                            @if (Model.LatestGitHubDeploymentJob.CompletedAt is not null)
+                            {
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Last run</dt>
+                                    <dd class="govuk-summary-list__value">@Model.LatestGitHubDeploymentJob.CompletedAt?.ToString("dd MMM yyyy HH:mm")</dd>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.LatestGitHubDeploymentJob.ErrorMessage))
+                            {
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Details</dt>
+                                    <dd class="govuk-summary-list__value">@Model.LatestGitHubDeploymentJob.ErrorMessage</dd>
+                                </div>
+                            }
+                        </dl>
+                    }
+                    else if (Model.Prototype.Status == PrototypeStatus.Live)
+                    {
+                        <p class="dfe-c-fe-text govuk-!-margin-bottom-@(Model.CanConfigureGitHub ? "4" : "0")">GitHub deployment has not been configured yet.</p>
+                    }
+
+                    @if (Model.CanConfigureGitHub)
+                    {
+                        <form method="post"
+                              asp-page="/Prototypes/ConfigureGithub"
+                              asp-route-id="@Model.Prototype.Id"
+                              class="prototype-action-form processing-trigger govuk-!-margin-bottom-0"
+                              data-processing-title="Configuring GitHub deployment"
+                              data-processing-message="Committing workflow, saving publish profile secret, and triggering deployment.">
+                            <govuk-button class="govuk-button govuk-button--secondary">
+                                @(Model.GitHubDeploymentConfigured ? "Reconfigure GitHub deployment" : "Configure GitHub deployment")
+                            </govuk-button>
+                        </form>
+                    }
+                </section>
+
+                break;
+
+            case DetailsModel.SettingsSection:
+                @await Html.PartialAsync("_PrototypeSettingsPanels")
+
+                @if (Model.CanDeletePrototype)
+                {
+                    <section class="dfe-c-fe-panel dfe-c-fe-panel--danger">
+                        <div class="dfe-c-fe-panel__header">
+                            <div>
+                                <h2 class="dfe-c-fe-heading">Danger zone</h2>
+                                <p class="dfe-c-fe-text">Archive or delete this hosting environment.</p>
+                            </div>
+                        </div>
+                        <div class="prototype-actions dfe-c-fe-actions">
+                            <form method="post" asp-page="/Prototypes/Archive" asp-route-id="@Model.Prototype.Id" class="dfe-c-fe-actions__item">
+                                <govuk-button class="govuk-button govuk-button--secondary">Archive prototype</govuk-button>
+                            </form>
+                            <form method="post"
+                                  asp-page="/Prototypes/Delete"
+                                  asp-route-id="@Model.Prototype.Id"
+                                  id="delete-prototype-form"
+                                  class="processing-trigger"
+                                  data-prototype-name="@Model.Prototype.Name"
+                                  data-deletes-github-repo="@(Model.Prototype.RequiresRepositoryScaffold ? "true" : "false")"
+                                  data-processing-title="Deleting prototype"
+                                  data-processing-message="@(Model.Prototype.RequiresRepositoryScaffold ? "Queuing removal of the Azure hosting environment and GitHub repository. This may take a minute." : "Queuing removal of the hosting environment. This may take a minute.")">
+                                <button type="button"
+                                        class="govuk-button govuk-button--warning"
+                                        id="delete-prototype-open">
+                                    Delete prototype
+                                </button>
+                                @await Html.PartialAsync("_DeletePrototypeModal")
+                            </form>
+                            @if (Model.CanRetry)
+                            {
+                                <form method="post" asp-page="/Prototypes/Retry" asp-route-id="@Model.Prototype.Id" class="dfe-c-fe-actions__item processing-trigger">
+                                    <govuk-button class="govuk-button govuk-button--secondary">Retry failed provisioning</govuk-button>
+                                </form>
+                            }
+                        </div>
+                    </section>
+                }
+                break;
+
+            case DetailsModel.ContactsSection:
+                @await Html.PartialAsync("_PrototypeContactsPanel")
+                break;
+
+            case DetailsModel.HistorySection:
+                @await Html.PartialAsync("_PrototypeActivityPanel")
+                break;
+        }
+</div>
+
+@if (Model.CanManage)
+{
+    @await Html.PartialAsync("_ChangePasswordModal")
+}
+
+@if (Model.CanManage && Model.AvailableBusinessAreas.Any())
+{
+    @await Html.PartialAsync("_ChangeBusinessAreaModal")
+}
+
+@if (Model.CanManage)
+{
+    @await Html.PartialAsync("_ChangeExpiryModal")
+}
+
+@if (Model.CanManageAppRuntime)
+{
+    @await Html.PartialAsync("_StartAppModal")
+    @await Html.PartialAsync("_StopAppModal")
+}
+
+</div>
+
+@section Scripts {
+    <script src="~/js/prototype-details.js" asp-append-version="true"></script>
+    @if (Model.ActiveSection == DetailsModel.SettingsSection && Model.CanDeletePrototype)
+    {
+        <script src="~/js/delete-prototype-modal.js" asp-append-version="true"></script>
+    }
+}

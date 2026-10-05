@@ -1,0 +1,93 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.GitHubOrganisationsModel
+@{
+    ViewData["Title"] = "GitHub organisations";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.GitHubOrganisationsSection;
+}
+
+<span class="govuk-caption-l">Administration</span>
+<h1 class="govuk-heading-l">Admin</h1>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+<div class="govuk-grid-row prototype-details-layout">
+    <div class="govuk-grid-column-one-third">
+        <partial name="_AdminNav" />
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
+        <h2 class="govuk-heading-m">@AdminNavigation.SectionTitle(AdminNavigation.GitHubOrganisationsSection)</h2>
+        <p class="govuk-body">
+            Only repositories in these GitHub organisations or user accounts can be used when creating a prototype.
+        </p>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+                </div>
+            </div>
+        }
+
+        <form method="post" asp-page-handler="Add" class="prototype-action-form govuk-!-margin-bottom-6">
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Input.Organisation)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
+                <label class="govuk-label" asp-for="Input.Organisation"></label>
+                <span class="govuk-hint">
+                    Enter a GitHub organisation or user URL, for example
+                    <code>https://github.com/DFE-Digital</code> or <code>https://github.com/andyjones81</code>.
+                </span>
+                <span class="govuk-error-message" asp-validation-for="Input.Organisation"></span>
+                <input class="govuk-input"
+                       asp-for="Input.Organisation"
+                       autocomplete="off"
+                       spellcheck="false" />
+            </div>
+
+            <govuk-button>Add organisation</govuk-button>
+        </form>
+
+        <h3 class="govuk-heading-s">Whitelisted organisations and accounts</h3>
+        @if (!Model.Organisations.Any())
+        {
+            <p class="govuk-body">No GitHub organisations are configured yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Organisation or account</th>
+                        <th scope="col" class="govuk-table__header">GitHub URL</th>
+                        <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var organisation in Model.Organisations)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><code>@organisation.Name</code></td>
+                        <td class="govuk-table__cell">
+                            <a class="govuk-link" href="@($"{PrototypeGitHubRepositoryUrls.GitHubBaseUrl}{organisation.Name}")">
+                                @PrototypeGitHubRepositoryUrls.GitHubBaseUrl@organisation.Name
+                            </a>
+                        </td>
+                        <td class="govuk-table__cell">
+                            <form method="post" asp-page-handler="Remove" asp-route-id="@organisation.Id" class="govuk-!-margin-0">
+                                <button type="submit" class="govuk-link govuk-body govuk-!-margin-0">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

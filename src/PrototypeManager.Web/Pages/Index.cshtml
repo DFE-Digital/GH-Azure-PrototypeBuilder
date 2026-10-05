@@ -1,0 +1,227 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Signed in as @Model.UserEmail</p>
+            <h1 class="dfe-c-fe-title">Dashboard</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-4">
+                Create, monitor and manage prototype hosting environments without giving users direct access to Azure.
+            </p>
+            <ul class="dfe-c-fe-stat-list" aria-label="Your prototype summary">
+                <li class="dfe-c-fe-stat-list__item">
+                    <span class="dfe-c-fe-stat-list__value">@Model.MyPrototypes.Count</span>
+                    <span class="dfe-c-fe-stat-list__label">visible to you</span>
+                </li>
+                @if (Model.LiveCount > 0)
+                {
+                    <li class="dfe-c-fe-stat-list__item">
+                        <span class="dfe-c-fe-badge dfe-c-fe-badge--success">@Model.LiveCount live</span>
+                    </li>
+                }
+                @if (Model.ActiveJobCount > 0)
+                {
+                    <li class="dfe-c-fe-stat-list__item">
+                        <span class="dfe-c-fe-badge dfe-c-fe-badge--info">@Model.ActiveJobCount in progress</span>
+                    </li>
+                }
+                @if (Model.ExpiringSoonCount > 0)
+                {
+                    <li class="dfe-c-fe-stat-list__item">
+                        <span class="dfe-c-fe-badge dfe-c-fe-badge--warning">@Model.ExpiringSoonCount expiring soon</span>
+                    </li>
+                }
+                @if (Model.FailedCount > 0)
+                {
+                    <li class="dfe-c-fe-stat-list__item">
+                        <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">@Model.FailedCount failed</span>
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="dfe-c-fe-page-header__actions">
+            <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+            <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host prototype</a>
+            @if (Model.MyPrototypes.Any())
+            {
+                <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/List")">View all prototypes</a>
+            }
+        </div>
+    </header>
+
+    <div class="dfe-c-fe-dashboard-layout">
+        <div class="dfe-c-fe-dashboard-layout__main">
+            @if (!Model.MyPrototypes.Any())
+            {
+                <div class="dfe-c-fe-empty dfe-c-fe-empty--panel">
+                    <h2 class="dfe-c-fe-heading">No prototypes yet</h2>
+                    <p class="dfe-c-fe-text">
+                        Create a prototype with the GOV.UK Prototype Kit, or host an existing GitHub repository in Azure.
+                    </p>
+                    <div class="dfe-c-fe-actions">
+                        <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                        <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host prototype</a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <section class="dfe-c-fe-panel">
+                    <div class="dfe-c-fe-panel__header dfe-c-fe-panel__header--split">
+                        <div>
+                            <h2 class="dfe-c-fe-heading">Your prototypes</h2>
+                            <p class="dfe-c-fe-text">
+                                @if (Model.MyPrototypes.Count > Model.RecentPrototypes.Count)
+                                {
+                                    <text>Showing your @Model.RecentPrototypes.Count most recent prototypes.</text>
+                                }
+                                else
+                                {
+                                    <text>Prototypes you own, manage, or can access through your business areas.</text>
+                                }
+                            </p>
+                        </div>
+                        @if (Model.MyPrototypes.Count > Model.RecentPrototypes.Count)
+                        {
+                            <a class="dfe-c-fe-link" href="@Url.Page("/Prototypes/List")">View all</a>
+                        }
+                    </div>
+
+                    <ul class="dfe-c-fe-app-list govuk-!-margin-bottom-0">
+                        @foreach (var prototype in Model.RecentPrototypes)
+                        {
+                            <li class="dfe-c-fe-app-row">
+                                <a class="dfe-c-fe-app-row__link"
+                                   asp-page="/Prototypes/Details"
+                                   asp-route-id="@prototype.Id">
+                                    <span class="dfe-c-fe-app-row__icon" aria-hidden="true">@prototype.Name[..1].ToUpperInvariant()</span>
+                                    <span class="dfe-c-fe-app-row__content">
+                                        <span class="dfe-c-fe-app-row__name">@prototype.Name</span>
+                                        <span class="dfe-c-fe-app-row__meta">
+                                            @(prototype.BusinessArea?.Name ?? "No business area") · @prototype.OwnerEmail
+                                        </span>
+                                    </span>
+                                    <span class="dfe-c-fe-app-row__aside">
+                                        <span class="@IndexModel.GetStatusBadgeClass(prototype.Status)">@IndexModel.GetStatusLabel(prototype.Status)</span>
+                                        <span class="dfe-c-fe-app-row__stack">@prototype.ExpiresAt.ToString("dd MMM yyyy")</span>
+                                    </span>
+                                </a>
+                                @if (!string.IsNullOrWhiteSpace(prototype.PrototypeUrl))
+                                {
+                                    <a class="govuk-button dfe-c-fe-app-row__open"
+                                       href="@prototype.PrototypeUrl"
+                                       target="_blank"
+                                       rel="noopener noreferrer">
+                                        Open<span class="govuk-visually-hidden"> @prototype.Name</span>
+                                    </a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
+        </div>
+
+        <aside class="dfe-c-fe-dashboard-layout__aside">
+            <section class="dfe-c-fe-panel">
+                <div class="dfe-c-fe-panel__header">
+                    <h2 class="dfe-c-fe-heading">Needs attention</h2>
+                    <p class="dfe-c-fe-text">Expiring prototypes and failed deployments that may need action.</p>
+                </div>
+
+                @if (!Model.HasAttentionItems)
+                {
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0">Nothing needs your attention right now.</p>
+                }
+                else
+                {
+                    @if (Model.ExpiringSoon.Any())
+                    {
+                        <h3 class="govuk-heading-s govuk-!-margin-top-0">Expiring soon</h3>
+                        <ul class="dfe-c-fe-attention-list govuk-!-margin-bottom-4">
+                            @foreach (var prototype in Model.ExpiringSoon.Take(5))
+                            {
+                                <li class="dfe-c-fe-attention-list__item">
+                                    <a class="govuk-link dfe-c-fe-attention-list__link"
+                                       asp-page="/Prototypes/Details"
+                                       asp-route-id="@prototype.Id"
+                                       asp-route-section="prototype">
+                                        @prototype.Name
+                                    </a>
+                                    <span class="dfe-c-fe-badge dfe-c-fe-badge--warning">@IndexModel.ExpiryLabel(prototype)</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Model.FailedDeployments.Any())
+                    {
+                        <h3 class="govuk-heading-s @(Model.ExpiringSoon.Any() ? string.Empty : "govuk-!-margin-top-0")">Failed deployments</h3>
+                        <ul class="dfe-c-fe-attention-list govuk-!-margin-bottom-0">
+                            @foreach (var prototype in Model.FailedDeployments.Take(5))
+                            {
+                                <li class="dfe-c-fe-attention-list__item">
+                                    <a class="govuk-link dfe-c-fe-attention-list__link"
+                                       asp-page="/Prototypes/Details"
+                                       asp-route-id="@prototype.Id">
+                                        @prototype.Name
+                                    </a>
+                                    <span class="dfe-c-fe-meta">@prototype.OwnerEmail</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            </section>
+
+            <section class="dfe-c-fe-panel">
+                <div class="dfe-c-fe-panel__header">
+                    <h2 class="dfe-c-fe-heading">Business areas</h2>
+                    <p class="dfe-c-fe-text">
+                        @if (User.IsAdmin())
+                        {
+                            <text>All business areas in the service.</text>
+                        }
+                        else
+                        {
+                            <text>Business areas assigned to you.</text>
+                        }
+                    </p>
+                </div>
+
+                @if (!Model.BusinessAreas.Any())
+                {
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0">There are no business areas to show yet.</p>
+                }
+                else
+                {
+                    <ul class="dfe-c-fe-area-list govuk-!-margin-bottom-0">
+                        @foreach (var businessArea in Model.BusinessAreas.OrderByDescending(area => area.PrototypeCount))
+                        {
+                            <li class="dfe-c-fe-area-list__item">
+                                <span class="dfe-c-fe-area-list__name">@businessArea.Name</span>
+                                <span class="dfe-c-fe-badge dfe-c-fe-badge--muted">
+                                    @businessArea.PrototypeCount prototype@(businessArea.PrototypeCount == 1 ? string.Empty : "s")
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="dfe-c-fe-panel dfe-c-fe-panel--muted">
+                <div class="dfe-c-fe-panel__header">
+                    <h2 class="dfe-c-fe-heading">New here?</h2>
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                        See how to get your prototype from GitHub to a live URL.
+                        <a class="govuk-link" href="@Url.Page("/GettingStarted")">Find out how it works</a>.
+                    </p>
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>

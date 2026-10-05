@@ -1,0 +1,16 @@
+<div id="processing-modal"
+     class="processing-modal"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="processing-modal-title"
+     aria-describedby="processing-modal-message"
+     hidden>
+    <div class="processing-modal__backdrop"></div>
+    <div class="processing-modal__panel">
+        <div class="processing-modal__spinner" aria-hidden="true"></div>
+        <h2 class="govuk-heading-m processing-modal__title" id="processing-modal-title">Processing</h2>
+        <p class="govuk-body processing-modal__message" id="processing-modal-message">Please wait…</p>
+    </div>
+</div>
+
+<script src="~/js/processing-modal.js" asp-append-version="true"></script>

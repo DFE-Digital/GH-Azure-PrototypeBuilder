@@ -1,0 +1,49 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.ExceptionsModel
+@{
+    ViewData["Title"] = "Exception requests";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.ExceptionsSection;
+}
+
+<span class="govuk-caption-l">Administration</span>
+<h1 class="govuk-heading-l">Admin</h1>
+
+<div class="govuk-grid-row prototype-details-layout">
+    <div class="govuk-grid-column-one-third">
+        <partial name="_AdminNav" />
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
+        <h2 class="govuk-heading-m">@AdminNavigation.SectionTitle(AdminNavigation.ExceptionsSection)</h2>
+        <p class="govuk-body">Review requests to use non-standard SKUs or extended expiry dates.</p>
+
+        @if (!Model.ExceptionRequests.Any())
+        {
+            <p class="govuk-body">There are no exception requests yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Prototype</th>
+                        <th scope="col" class="govuk-table__header">Requested by</th>
+                        <th scope="col" class="govuk-table__header">Requested SKU</th>
+                        <th scope="col" class="govuk-table__header">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var request in Model.ExceptionRequests)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">@request.PrototypeId</td>
+                        <td class="govuk-table__cell">@request.RequestedBy</td>
+                        <td class="govuk-table__cell">@request.RequestedSku</td>
+                        <td class="govuk-table__cell">@request.Status</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

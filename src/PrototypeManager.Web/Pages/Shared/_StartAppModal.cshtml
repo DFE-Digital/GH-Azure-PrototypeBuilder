@@ -1,0 +1,28 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="start-app-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="start-app-modal-title"
+        aria-describedby="start-app-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="StartApp" asp-route-id="@Model.Prototype!.Id">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="start-app-modal-title">Start app</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="start-app-modal-description">
+                <p class="govuk-body">
+                    This will start the hosted app for <strong>@Model.Prototype!.Name</strong>.
+                    The prototype will be available once the app has finished starting.
+                </p>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Start app</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

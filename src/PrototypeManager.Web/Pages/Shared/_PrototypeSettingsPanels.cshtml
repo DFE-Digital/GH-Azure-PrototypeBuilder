@@ -1,0 +1,140 @@
+@using PrototypeManager.Domain
+@using PrototypeManager.Web.Pages.Prototypes
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+@{
+    var userSettings = Model.UserAppSettings.ToList();
+    var systemSettings = Model.SystemAppSettings.ToList();
+    var customSettings = userSettings
+        .Where(setting => !PrototypeAppSettingCatalog.IsPasswordKey(setting.Key))
+        .ToList();
+}
+
+<section id="prototype-app-settings"
+         class="dfe-c-fe-panel govuk-!-margin-bottom-6"
+         data-setting-value-url="@Model.AppSettingValueUrl">
+    <div class="dfe-c-fe-panel__header">
+        <div class="dfe-c-fe-panel__header--split">
+            <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Environment settings</h2>
+            @if (Model.CanManage)
+            {
+                <a class="govuk-link"
+                   href="#"
+                   role="button"
+                   aria-controls="add-config-var-modal">
+                    Add app setting
+                </a>
+            }
+        </div>
+        <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+            Environment variables passed to the hosted prototype app, including the prototype password.
+            Keys must start with a letter and use letters, numbers and underscores.
+        </p>
+    </div>
+
+    <h3 class="govuk-heading-s govuk-!-margin-top-6">Your app settings</h3>
+    @if (!userSettings.Any())
+    {
+        <p class="govuk-body govuk-!-margin-bottom-6">No app settings are configured yet.</p>
+    }
+    else
+    {
+        <table class="govuk-table prototype-settings-table govuk-!-margin-bottom-6">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Key</th>
+                    <th scope="col" class="govuk-table__header">Value</th>
+                    @if (Model.CanManage)
+                    {
+                        <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+                    }
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var setting in userSettings)
+            {
+                var isPassword = PrototypeAppSettingCatalog.IsPasswordKey(setting.Key);
+
+                <tr class="govuk-table__row" data-setting-key="@setting.Key">
+                    <td class="govuk-table__cell">
+                        <span class="prototype-settings-table__key">@setting.Key</span>
+                        @if (!string.IsNullOrWhiteSpace(setting.Description))
+                        {
+                            <span class="prototype-settings-table__description">@setting.Description</span>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">
+                        @if (isPassword)
+                        {
+                            <code class="dfe-c-fe-password-field__value">@Model.GetAppSettingDisplayValue(setting)</code>
+                        }
+                        else
+                        {
+                            @Model.GetAppSettingDisplayValue(setting)
+                        }
+                    </td>
+                    @if (Model.CanManage)
+                    {
+                        <td class="govuk-table__cell">
+                            <a class="govuk-link dfe-f-manage-config-open"
+                               href="#"
+                               role="button"
+                               aria-controls="manage-config-var-modal"
+                               data-config-key="@setting.Key"
+                               data-config-secret="@(setting.IsSecret ? "true" : "false")"
+                               data-config-removable="@(isPassword ? "false" : "true")"
+                               data-config-password="@(isPassword ? "true" : "false")">
+                                Manage
+                            </a>
+                        </td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        @if (Model.CanManage && !customSettings.Any())
+        {
+            <p class="govuk-body govuk-!-margin-bottom-6">
+                Add more environment variables for your prototype using
+                <a class="govuk-link" href="#" role="button" aria-controls="add-config-var-modal">Add app setting</a>.
+            </p>
+        }
+    }
+
+    <h3 class="govuk-heading-s">System settings</h3>
+    @if (!systemSettings.Any())
+    {
+        <p class="govuk-body govuk-!-margin-bottom-0">No system settings are configured yet.</p>
+    }
+    else
+    {
+        <table class="govuk-table prototype-settings-table govuk-!-margin-bottom-0">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Key</th>
+                    <th scope="col" class="govuk-table__header">Value</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var setting in systemSettings)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        <span class="prototype-settings-table__key">@setting.Key</span>
+                        @if (!string.IsNullOrWhiteSpace(setting.Description))
+                        {
+                            <span class="prototype-settings-table__description">@setting.Description</span>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">@setting.Value</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+
+@if (Model.CanManage)
+{
+    @await Html.PartialAsync("_PrototypeSettingsModals")
+}
