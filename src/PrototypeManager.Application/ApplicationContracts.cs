@@ -144,6 +144,8 @@ public interface IAccessManagementService
     Task<IReadOnlyList<BusinessAreaSummary>> GetVisibleBusinessAreaSummariesAsync(string email, bool isAdmin);
     Task<IReadOnlyList<AppUserAccessRecord>> GetUsersAsync();
     Task<IReadOnlyList<AppUserAccessRecord>> GetAdminsAsync();
+    Task<bool> HasPrototypeManagerAdminAsync();
+    Task BootstrapFirstAdminAsync(string email, string displayName);
     Task SaveUserAccessAsync(UpdateUserAccessRequest request, string actorEmail);
     Task SetPrototypeManagerAdminAsync(SetPrototypeManagerAdminRequest request, string actorEmail);
     Task RemovePrototypeManagerAdminAsync(string email, string actorEmail);

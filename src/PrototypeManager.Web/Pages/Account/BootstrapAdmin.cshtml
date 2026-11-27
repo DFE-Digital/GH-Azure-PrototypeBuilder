@@ -1,0 +1,54 @@
+@page
+@model PrototypeManager.Web.Pages.Account.BootstrapAdminModel
+@{
+    ViewData["Title"] = "Become the first admin";
+}
+
+<h1 class="govuk-heading-l">Become the first Prototype Manager admin</h1>
+
+@if (Model.AlreadyConfigured)
+{
+    <div class="govuk-warning-text">
+        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+        <strong class="govuk-warning-text__text">
+            <span class="govuk-visually-hidden">Warning</span>
+            An admin has already been set up. This one-time page is closed.
+            Ask an existing admin to grant you access from Admin → Prototype Manager admins.
+        </strong>
+    </div>
+    <p class="govuk-body">
+        <a class="govuk-link" href="@Url.Page("/Index")">Return to the homepage</a>
+    </p>
+}
+else
+{
+    <p class="govuk-body">
+        No Prototype Manager admins exist yet. Use this one-time page to grant admin access
+        to the account you are signed in with.
+    </p>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="govuk-error-summary" data-module="govuk-error-summary">
+            <div role="alert">
+                <h2 class="govuk-error-summary__title">There is a problem</h2>
+                <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+            </div>
+        </div>
+    }
+
+    <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Name</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.DisplayName) ? "—" : Model.DisplayName)</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Email</dt>
+            <dd class="govuk-summary-list__value">@(string.IsNullOrWhiteSpace(Model.Email) ? "—" : Model.Email)</dd>
+        </div>
+    </dl>
+
+    <form method="post">
+        <govuk-button>Make me an admin</govuk-button>
+    </form>
+}

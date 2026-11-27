@@ -87,6 +87,54 @@ internal sealed class AccessManagementService(
         return admins.Where(user => user.IsAdmin).ToList();
     }
 
+    public Task<bool> HasPrototypeManagerAdminAsync() =>
+        dbContext.AppUsers.AsNoTracking().AnyAsync(user => user.IsAdmin);
+
+    public async Task BootstrapFirstAdminAsync(string email, string displayName)
+    {
+        if (await HasPrototypeManagerAdminAsync())
+        {
+            throw new ValidationException(
+                "Prototype Manager already has an admin. Ask an existing admin to grant access.");
+        }
+
+        var normalizedEmail = NormalizeEmail(email);
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            throw new ValidationException("Sign in with a work account before becoming the first admin.");
+        }
+
+        var user = await dbContext.AppUsers.SingleOrDefaultAsync(x => x.Email == normalizedEmail);
+        var resolvedName = string.IsNullOrWhiteSpace(displayName) ? normalizedEmail : displayName.Trim();
+
+        if (user is null)
+        {
+            user = new AppUser
+            {
+                Email = normalizedEmail,
+                DisplayName = resolvedName,
+                IsAdmin = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                LastSignedInAt = DateTimeOffset.UtcNow
+            };
+            dbContext.AppUsers.Add(user);
+        }
+        else
+        {
+            user.DisplayName = string.IsNullOrWhiteSpace(user.DisplayName) ? resolvedName : user.DisplayName;
+            user.IsAdmin = true;
+            user.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await dbContext.SaveChangesAsync();
+        await auditService.RecordAsync(
+            null,
+            normalizedEmail,
+            "Prototype Manager first admin bootstrapped",
+            $"Granted first Prototype Manager admin access to {normalizedEmail}.");
+    }
+
     public async Task SaveUserAccessAsync(UpdateUserAccessRequest request, string actorEmail)
     {
         var normalizedEmail = NormalizeEmail(request.Email);

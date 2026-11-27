@@ -27,12 +27,16 @@ public sealed class IndexModel(
 
     public bool HasAttentionItems => FailedDeployments.Any();
 
+    public bool CanBootstrapFirstAdmin { get; private set; }
+
     public IReadOnlyList<Prototype> RecentPrototypes => MyPrototypes.Take(8).ToList();
 
     public async Task OnGetAsync()
     {
         var isAdmin = User.IsAdmin();
         var isSupport = User.IsSupport();
+
+        CanBootstrapFirstAdmin = !isAdmin && !await accessManagementService.HasPrototypeManagerAdminAsync();
 
         MyPrototypes = await prototypeService.GetVisibleAsync(UserEmail, isAdmin, isSupport);
         BusinessAreas = await accessManagementService.GetVisibleBusinessAreaSummariesAsync(UserEmail, isAdmin);

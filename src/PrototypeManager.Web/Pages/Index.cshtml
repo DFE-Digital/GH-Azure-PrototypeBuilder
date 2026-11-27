@@ -11,6 +11,17 @@
 }
 
 <div class="dfe-c-fe-shell dfe-c-fe-dashboard">
+    @if (Model.CanBootstrapFirstAdmin)
+    {
+        <govuk-notification-banner>
+            <govuk-notification-banner-title>Setup</govuk-notification-banner-title>
+            <p class="govuk-notification-banner__heading">
+                No Prototype Manager admin has been set yet.
+                <a class="govuk-link" href="@Url.Page("/Account/BootstrapAdmin")">Make yourself the first admin</a>.
+            </p>
+        </govuk-notification-banner>
+    }
+
     @if (!Model.MyPrototypes.Any())
     {
         <div class="dfe-c-fe-start-page">
