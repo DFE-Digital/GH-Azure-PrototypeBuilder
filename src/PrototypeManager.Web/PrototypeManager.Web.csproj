@@ -13,6 +13,14 @@
     <PackageReference Include="Microsoft.Identity.Web" Version="4.12.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\infra\compiled\prototype-hosting.json"
+             Link="infra\compiled\prototype-hosting.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Condition="Exists('..\..\infra\compiled\prototype-hosting.json')" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

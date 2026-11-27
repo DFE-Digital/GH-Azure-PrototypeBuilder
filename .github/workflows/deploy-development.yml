@@ -47,12 +47,20 @@ jobs:
       - name: Run tests
         run: dotnet test PrototypeManager.slnx --configuration Release --no-restore --logger "console;verbosity=minimal"
 
+      - name: Compile prototype hosting Bicep
+        run: |
+          mkdir -p infra/compiled
+          az bicep build --file infra/prototype-hosting/main.bicep --outfile infra/compiled/prototype-hosting.json
+
       - name: Publish
         run: >
           dotnet publish ${{ env.WEB_PROJECT }}
           --configuration Release
           --no-restore
           --output ./publish
+
+      - name: Verify hosting template is packaged
+        run: test -f ./publish/infra/compiled/prototype-hosting.json
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

@@ -97,6 +97,30 @@ Do not put live connection strings or API keys in git. Configure them on the App
 - `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`, `AzureAd__Instance`, `AzureAd__CallbackPath`
 - Plus GitHub, Compass, Notify, and provisioning settings as needed
 
+### Managed identity (required for Azure provisioning)
+
+Locally, `DefaultAzureCredential` uses your Azure CLI / Visual Studio login. On App Service it must use a managed identity.
+
+1. Enable a **system-assigned** managed identity on `s186d01-app-prototype-manager` (Identity blade, or `az webapp identity assign`).
+2. Ask a subscription Owner / User Access Administrator to grant that identity **Contributor** on subscription `76c4c747-87a5-47c6-97f3-7248276192f1` (needed so the app can create prototype resource groups and manage the Free plan pool).
+
+Example (run by someone with role-assignment rights):
+
+```bash
+PRINCIPAL_ID=$(az webapp identity show \
+  --name s186d01-app-prototype-manager \
+  --resource-group s186d01-rg-prototype-manager \
+  --query principalId -o tsv)
+
+az role assignment create \
+  --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope /subscriptions/76c4c747-87a5-47c6-97f3-7248276192f1
+```
+
+After the role assignment propagates (often a few minutes), open **Admin → Azure** and confirm authentication succeeds and the Free plan pool resource group is readable.
+
 ### Microsoft Entra ID
 
 The app authenticates DfE work accounts with Microsoft.Identity.Web whenever `DevelopmentUser:Enabled` is `false` (hosted and local). The header shows the signed-in Entra profile name; on first sign-in that profile is stored against the pre-provisioned access record.
@@ -185,12 +209,14 @@ The web app uses `GovUk.Frontend.AspNetCore` and the GOV.UK page template. Stati
 
 ## Compile the Bicep template
 
-Compile the template before using Azure mode:
+Compile the template before using Azure mode locally:
 
 ```bash
 mkdir -p infra/compiled
 az bicep build --file infra/prototype-hosting/main.bicep --outfile infra/compiled/prototype-hosting.json
 ```
+
+The Development deploy workflow compiles this automatically and publishes it to `infra/compiled/prototype-hosting.json` under the App Service content root. Without that file on the server, Azure mode reports “Hosting template not found”.
 
 ## Security notes
 
