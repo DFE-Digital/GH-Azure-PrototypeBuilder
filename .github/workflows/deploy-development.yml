@@ -36,6 +36,13 @@ jobs:
       - name: Restore
         run: dotnet restore PrototypeManager.slnx
 
+      - name: Ensure DfE frontend static asset placeholder
+        run: |
+          mkdir -p "$HOME/.nuget/packages/dfedigital.frontend.aspnetcore"/*/staticwebassets/dfe
+          for dir in "$HOME/.nuget/packages/dfedigital.frontend.aspnetcore"/*/staticwebassets/dfe; do
+            [ -d "$dir" ] && touch "$dir/.gitkeep"
+          done
+
       - name: Run tests
         run: dotnet test PrototypeManager.slnx --configuration Release --no-restore --logger "console;verbosity=minimal"
 
