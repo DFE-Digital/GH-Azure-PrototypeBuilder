@@ -339,6 +339,12 @@ internal sealed class DevelopmentDataSeeder(
     PrototypeManagerDbContext dbContext,
     IOptions<DevelopmentUserOptions> developmentUserOptions)
 {
+    public async Task SeedCatalogAsync()
+    {
+        await SeedBusinessAreasAsync();
+        await SeedGitHubOrganisationsAsync();
+    }
+
     public async Task SeedAsync()
     {
         var businessAreas = await SeedBusinessAreasAsync();

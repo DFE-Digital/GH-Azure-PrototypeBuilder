@@ -240,9 +240,15 @@ public static class InfrastructureServiceCollectionExtensions
             await context.ApplySqlServerAppUserProfileUpdatesAsync();
         }
 
+        // Catalog defaults (business areas, GitHub orgs) are required in every environment.
+        // Sample prototypes / DevelopmentUser seeding stays local-only.
         if (environment.IsDevelopment())
         {
             await seeder.SeedAsync();
+        }
+        else
+        {
+            await seeder.SeedCatalogAsync();
         }
     }
 
