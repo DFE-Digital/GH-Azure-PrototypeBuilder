@@ -237,6 +237,7 @@ public static class InfrastructureServiceCollectionExtensions
         {
             // No EF migrations in-repo yet; create schema from the model for Azure SQL.
             await context.Database.EnsureCreatedAsync();
+            await context.ApplySqlServerAppUserProfileUpdatesAsync();
         }
 
         if (environment.IsDevelopment())

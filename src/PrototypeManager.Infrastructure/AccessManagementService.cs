@@ -65,6 +65,8 @@ internal sealed class AccessManagementService(
         {
             Email = user.Email,
             DisplayName = user.DisplayName,
+            EntraObjectId = user.EntraObjectId,
+            LastSignedInAt = user.LastSignedInAt,
             IsAdmin = user.IsAdmin,
             PrototypeAccessCount = prototypeAccessCounts.GetValueOrDefault(user.Email),
             BusinessAreaIds = user.BusinessAreaAssignments
@@ -112,7 +114,8 @@ internal sealed class AccessManagementService(
             user = new AppUser
             {
                 Email = normalizedEmail,
-                DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? normalizedEmail : request.DisplayName.Trim(),
+                // Name/profile filled from Microsoft Entra when they first sign in.
+                DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? string.Empty : request.DisplayName.Trim(),
                 IsAdmin = false,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -121,7 +124,11 @@ internal sealed class AccessManagementService(
         }
         else
         {
-            user.DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? user.DisplayName : request.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(request.DisplayName))
+            {
+                user.DisplayName = request.DisplayName.Trim();
+            }
+
             user.UpdatedAt = DateTimeOffset.UtcNow;
             dbContext.AppUserBusinessAreaAssignments.RemoveRange(user.BusinessAreaAssignments);
         }

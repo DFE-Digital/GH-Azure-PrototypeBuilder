@@ -28,7 +28,13 @@ public static class ClaimsPrincipalExtensions
         ?? string.Empty;
 
     public static string GetDisplayName(this ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.Name) ?? principal.GetEmail();
+        principal.FindFirstValue(ClaimTypes.Name)
+        ?? principal.FindFirstValue("name")
+        ?? principal.GetEmail();
+
+    public static string? GetEntraObjectId(this ClaimsPrincipal principal) =>
+        principal.FindFirstValue("oid")
+        ?? principal.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
 
     public static string GetTeam(this ClaimsPrincipal principal) =>
         principal.FindFirstValue(PrototypeManagerClaimTypes.Team) ?? string.Empty;
@@ -122,32 +128,52 @@ public sealed class AppUserClaimsTransformation(
         }
 
         var normalizedEmail = principal.GetEmail().Trim().ToLowerInvariant();
+        var entraObjectId = principal.GetEntraObjectId();
+        var displayName = principal.GetDisplayName().Trim();
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail))
+        if (string.IsNullOrWhiteSpace(normalizedEmail) && string.IsNullOrWhiteSpace(entraObjectId))
         {
             return principal;
         }
 
-        var identity = principal.Identities.FirstOrDefault(identity => identity.IsAuthenticated);
-
+        var identity = principal.Identities.FirstOrDefault(item => item.IsAuthenticated);
         if (identity is null)
         {
             return principal;
         }
 
-        var appUser = await dbContext.AppUsers
-            .Include(x => x.BusinessAreaAssignments)
-            .SingleOrDefaultAsync(x => x.Email == normalizedEmail);
+        // Prefer matching a pre-provisioned access record by email; fall back to Entra object id.
+        AppUser? appUser = null;
+        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            appUser = await dbContext.AppUsers
+                .Include(x => x.BusinessAreaAssignments)
+                .SingleOrDefaultAsync(x => x.Email == normalizedEmail);
+        }
+
+        if (appUser is null && !string.IsNullOrWhiteSpace(entraObjectId))
+        {
+            appUser = await dbContext.AppUsers
+                .Include(x => x.BusinessAreaAssignments)
+                .SingleOrDefaultAsync(x => x.EntraObjectId == entraObjectId);
+        }
 
         if (appUser is null)
         {
+            if (string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                return principal;
+            }
+
             appUser = new AppUser
             {
                 Email = normalizedEmail,
-                DisplayName = principal.GetDisplayName(),
+                DisplayName = displayName,
+                EntraObjectId = string.IsNullOrWhiteSpace(entraObjectId) ? null : entraObjectId,
                 IsAdmin = principal.IsInRole(AppRoles.Admin),
                 CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
+                UpdatedAt = DateTimeOffset.UtcNow,
+                LastSignedInAt = DateTimeOffset.UtcNow
             };
 
             dbContext.AppUsers.Add(appUser);
@@ -155,11 +181,41 @@ public sealed class AppUserClaimsTransformation(
         }
         else
         {
-            var displayName = principal.GetDisplayName();
+            var changed = false;
+
+            if (!string.IsNullOrWhiteSpace(normalizedEmail) &&
+                !string.Equals(appUser.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                appUser.Email = normalizedEmail;
+                changed = true;
+            }
+
             if (!string.IsNullOrWhiteSpace(displayName) &&
                 !string.Equals(appUser.DisplayName, displayName, StringComparison.Ordinal))
             {
                 appUser.DisplayName = displayName;
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entraObjectId) &&
+                !string.Equals(appUser.EntraObjectId, entraObjectId, StringComparison.Ordinal))
+            {
+                appUser.EntraObjectId = entraObjectId;
+                changed = true;
+            }
+
+            var shouldTouchSignIn =
+                appUser.LastSignedInAt is null ||
+                appUser.LastSignedInAt < DateTimeOffset.UtcNow.AddHours(-1);
+
+            if (shouldTouchSignIn)
+            {
+                appUser.LastSignedInAt = DateTimeOffset.UtcNow;
+                changed = true;
+            }
+
+            if (changed)
+            {
                 appUser.UpdatedAt = DateTimeOffset.UtcNow;
                 await dbContext.SaveChangesAsync();
             }

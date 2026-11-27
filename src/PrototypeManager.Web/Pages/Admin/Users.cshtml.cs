@@ -37,11 +37,11 @@ public sealed class UsersModel(
             await accessManagementService.SaveUserAccessAsync(new UpdateUserAccessRequest
             {
                 Email = Input.Email,
-                DisplayName = Input.DisplayName,
+                DisplayName = string.Empty,
                 BusinessAreaIds = Input.BusinessAreaIds
             }, User.GetEmail());
 
-            StatusMessage = "Business area access updated.";
+            StatusMessage = "Access saved. Their name and Microsoft profile will update when they sign in.";
             return RedirectToPage();
         }
         catch (ValidationException exception)
@@ -59,13 +59,10 @@ public sealed class UsersModel(
 
     public sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
-        [Display(Name = "Email")]
+        [Required(ErrorMessage = "Enter their work email address.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        [Display(Name = "Email address")]
         public string Email { get; set; } = string.Empty;
-
-        [Display(Name = "Display name")]
-        public string DisplayName { get; set; } = string.Empty;
 
         public List<Guid> BusinessAreaIds { get; set; } = [];
     }

@@ -484,6 +484,9 @@ public sealed class AppUserAccessRecord
 {
     public string Email { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
+    public string? EntraObjectId { get; init; }
+    public bool HasSignedIn => !string.IsNullOrWhiteSpace(EntraObjectId) || LastSignedInAt is not null;
+    public DateTimeOffset? LastSignedInAt { get; init; }
     public bool IsAdmin { get; init; }
     public int PrototypeAccessCount { get; init; }
     public IReadOnlyList<Guid> BusinessAreaIds { get; init; } = [];

@@ -419,9 +419,14 @@ public class AppUser
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Email { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Microsoft Entra object id (oid), set when the user first signs in.</summary>
+    public string? EntraObjectId { get; set; }
+
     public bool IsAdmin { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastSignedInAt { get; set; }
 
     public List<AppUserBusinessAreaAssignment> BusinessAreaAssignments { get; set; } = [];
 }

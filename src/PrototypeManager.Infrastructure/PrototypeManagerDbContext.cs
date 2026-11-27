@@ -36,7 +36,9 @@ public class PrototypeManagerDbContext(DbContextOptions<PrototypeManagerDbContex
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Email).HasMaxLength(320);
             builder.Property(x => x.DisplayName).HasMaxLength(200);
+            builder.Property(x => x.EntraObjectId).HasMaxLength(64);
             builder.HasIndex(x => x.Email).IsUnique();
+            builder.HasIndex(x => x.EntraObjectId);
         });
 
         modelBuilder.Entity<AppUserBusinessAreaAssignment>(builder =>

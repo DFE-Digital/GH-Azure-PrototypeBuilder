@@ -96,15 +96,28 @@ internal static class DevelopmentSchemaUpdater
                 "Id" TEXT NOT NULL CONSTRAINT "PK_AppUsers" PRIMARY KEY,
                 "Email" TEXT NOT NULL,
                 "DisplayName" TEXT NOT NULL,
+                "EntraObjectId" TEXT NULL,
                 "IsAdmin" INTEGER NOT NULL,
                 "CreatedAt" TEXT NOT NULL,
-                "UpdatedAt" TEXT NOT NULL
+                "UpdatedAt" TEXT NOT NULL,
+                "LastSignedInAt" TEXT NULL
             );
             """);
+
+        if (!await ColumnExistsAsync(connection, "AppUsers", "EntraObjectId"))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("""ALTER TABLE "AppUsers" ADD COLUMN "EntraObjectId" TEXT NULL;""");
+        }
+
+        if (!await ColumnExistsAsync(connection, "AppUsers", "LastSignedInAt"))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("""ALTER TABLE "AppUsers" ADD COLUMN "LastSignedInAt" TEXT NULL;""");
+        }
 
         await dbContext.Database.ExecuteSqlRawAsync(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_AppUsers_Email" ON "AppUsers" ("Email");
+            CREATE INDEX IF NOT EXISTS "IX_AppUsers_EntraObjectId" ON "AppUsers" ("EntraObjectId");
             """);
 
         await dbContext.Database.ExecuteSqlRawAsync(
@@ -242,6 +255,34 @@ internal static class DevelopmentSchemaUpdater
         {
             await dbContext.SaveChangesAsync();
         }
+    }
+
+    public static async Task ApplySqlServerAppUserProfileUpdatesAsync(this PrototypeManagerDbContext dbContext)
+    {
+        if (!dbContext.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('AppUsers', 'EntraObjectId') IS NULL
+                ALTER TABLE AppUsers ADD EntraObjectId nvarchar(64) NULL;
+            """);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('AppUsers', 'LastSignedInAt') IS NULL
+                ALTER TABLE AppUsers ADD LastSignedInAt datetimeoffset NULL;
+            """);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE name = 'IX_AppUsers_EntraObjectId' AND object_id = OBJECT_ID('AppUsers'))
+                CREATE INDEX IX_AppUsers_EntraObjectId ON AppUsers (EntraObjectId);
+            """);
     }
 
     private static async Task<bool> ColumnExistsAsync(System.Data.Common.DbConnection connection, string tableName, string columnName)

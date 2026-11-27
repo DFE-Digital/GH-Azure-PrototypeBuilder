@@ -7,7 +7,11 @@
 
 <h1 class="govuk-heading-l">@AdminNavigation.SectionTitle(AdminNavigation.UsersSection)</h1>
 <p class="govuk-body">
-    Assign people to business areas so they can see prototypes in those areas.
+    Add someone by email address and choose their business areas.
+    When they sign in with Microsoft Entra, Prototype Manager stores their profile
+    (name and Entra object id) against that access record.
+</p>
+<p class="govuk-body">
     Use <a class="govuk-link" href="@Url.Page("/Admin/Admins")">Prototype Manager admins</a>
     to grant full admin access, or
     <a class="govuk-link" href="@Url.Page("/Admin/RemoveAccess")">remove access</a>
@@ -35,13 +39,9 @@
 <form method="post" class="prototype-action-form">
     <div class="govuk-form-group">
         <label class="govuk-label" asp-for="Input.Email"></label>
+        <div class="govuk-hint">Use their work email, for example name@education.gov.uk.</div>
         <span class="govuk-error-message" asp-validation-for="Input.Email"></span>
         <input class="govuk-input" asp-for="Input.Email" autocomplete="off" />
-    </div>
-
-    <div class="govuk-form-group">
-        <label class="govuk-label" asp-for="Input.DisplayName"></label>
-        <input class="govuk-input" asp-for="Input.DisplayName" autocomplete="off" />
     </div>
 
     <div class="govuk-form-group">
@@ -49,6 +49,7 @@
             <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
                 Business areas
             </legend>
+            <div class="govuk-hint">They will see prototypes in the areas you select.</div>
             <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                 @foreach (var businessArea in Model.BusinessAreas)
                 {
@@ -81,7 +82,8 @@ else
     <table class="govuk-table">
         <thead class="govuk-table__head">
             <tr class="govuk-table__row">
-                <th scope="col" class="govuk-table__header">Email</th>
+                <th scope="col" class="govuk-table__header">Person</th>
+                <th scope="col" class="govuk-table__header">Sign-in</th>
                 <th scope="col" class="govuk-table__header">Business areas</th>
                 <th scope="col" class="govuk-table__header">Prototypes</th>
                 <th scope="col" class="govuk-table__header">Admin</th>
@@ -99,6 +101,21 @@ else
                     {
                         <br />
                         <span class="govuk-hint govuk-!-margin-bottom-0">@user.DisplayName</span>
+                    }
+                </td>
+                <td class="govuk-table__cell">
+                    @if (user.HasSignedIn)
+                    {
+                        <text>Signed in</text>
+                        @if (user.LastSignedInAt is not null)
+                        {
+                            <br />
+                            <span class="govuk-hint govuk-!-margin-bottom-0">@user.LastSignedInAt.Value.ToString("d MMM yyyy HH:mm") UTC</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="govuk-hint govuk-!-margin-bottom-0">Pending first sign-in</span>
                     }
                 </td>
                 <td class="govuk-table__cell">
