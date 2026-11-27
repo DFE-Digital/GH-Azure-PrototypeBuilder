@@ -29,8 +29,8 @@ Prototype Manager is an internal ASP.NET Core app for creating and managing tigh
 
 4. Open the local URL shown by ASP.NET Core.
 
-In Development, auth uses the configured development user from `src/PrototypeManager.Web/appsettings.Development.json`.
-The database provider follows the connection string: SQLite for `Data Source=…db`, otherwise SQL Server (including Azure SQL for shared Dev).
+In Development, auth uses the configured development user from `src/PrototypeManager.Web/appsettings.Development.json`, and the local database is SQLite (`Data Source=prototype-manager.db`) so local work does not touch shared Dev data.
+Hosted Dev uses Azure SQL via the App Service connection string. The provider is chosen from the connection string (SQLite vs SQL Server).
 
 ## How to run tests
 
