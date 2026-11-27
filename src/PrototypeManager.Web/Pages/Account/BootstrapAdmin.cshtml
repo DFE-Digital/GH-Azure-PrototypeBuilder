@@ -13,9 +13,16 @@
         <strong class="govuk-warning-text__text">
             <span class="govuk-visually-hidden">Warning</span>
             An admin has already been set up. This one-time page is closed.
-            Ask an existing admin to grant you access from Admin → Prototype Manager admins.
         </strong>
     </div>
+    <p class="govuk-body">
+        Existing admin@(Model.ExistingAdminEmails.Count == 1 ? "" : "s"):
+        <strong>@string.Join(", ", Model.ExistingAdminEmails)</strong>.
+        Ask them to grant you access from Admin → Prototype Manager admins.
+    </p>
+    <p class="govuk-body">
+        Signed in as <strong>@(string.IsNullOrWhiteSpace(Model.Email) ? "—" : Model.Email)</strong>.
+    </p>
     <p class="govuk-body">
         <a class="govuk-link" href="@Url.Page("/Index")">Return to the homepage</a>
     </p>

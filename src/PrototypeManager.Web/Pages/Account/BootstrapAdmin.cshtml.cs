@@ -14,14 +14,20 @@ public sealed class BootstrapAdminModel(
 
     public bool AlreadyConfigured { get; private set; }
 
+    public bool CurrentUserIsStoredAdmin { get; private set; }
+
+    public IReadOnlyList<string> ExistingAdminEmails { get; private set; } = [];
+
     [TempData]
     public string? StatusMessage { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
-        AlreadyConfigured = await accessManagementService.HasPrototypeManagerAdminAsync();
-        if (AlreadyConfigured && User.IsAdmin())
+        await LoadAsync();
+
+        if (User.IsAdmin() || CurrentUserIsStoredAdmin)
         {
+            StatusMessage = "You already have Prototype Manager admin access.";
             return RedirectToPage("/Admin/Index");
         }
 
@@ -30,7 +36,14 @@ public sealed class BootstrapAdminModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
-        AlreadyConfigured = await accessManagementService.HasPrototypeManagerAdminAsync();
+        await LoadAsync();
+
+        if (User.IsAdmin() || CurrentUserIsStoredAdmin)
+        {
+            StatusMessage = "You already have Prototype Manager admin access.";
+            return RedirectToPage("/Admin/Index");
+        }
+
         if (AlreadyConfigured)
         {
             ModelState.AddModelError(
@@ -50,5 +63,19 @@ public sealed class BootstrapAdminModel(
             ModelState.AddModelError(string.Empty, exception.Message);
             return Page();
         }
+    }
+
+    private async Task LoadAsync()
+    {
+        var admins = await accessManagementService.GetAdminsAsync();
+        ExistingAdminEmails = admins
+            .Select(admin => admin.Email)
+            .Where(email => !string.IsNullOrWhiteSpace(email))
+            .ToList();
+        AlreadyConfigured = ExistingAdminEmails.Count > 0;
+
+        var normalizedEmail = Email.Trim().ToLowerInvariant();
+        CurrentUserIsStoredAdmin = admins.Any(admin =>
+            string.Equals(admin.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -281,7 +281,8 @@ public sealed class AppUserClaimsTransformation(
 
         if (appUser.IsAdmin && !principal.IsInRole(AppRoles.Admin))
         {
-            identity.AddClaim(new Claim(ClaimTypes.Role, AppRoles.Admin));
+            // Use this identity's RoleClaimType (Entra sets it to "roles", not ClaimTypes.Role).
+            identity.AddClaim(new Claim(identity.RoleClaimType, AppRoles.Admin));
         }
 
         foreach (var businessAreaId in appUser.BusinessAreaAssignments.Select(assignment => assignment.BusinessAreaId))
