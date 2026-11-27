@@ -40,6 +40,27 @@ internal static class PrototypeKitTarballScaffold
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
+        var files = await LoadStarterFilesAsync(versionSpec, logger, cancellationToken);
+        Directory.CreateDirectory(workingDirectory);
+
+        foreach (var (relativePath, contents) in files)
+        {
+            var destinationPath = Path.Combine(workingDirectory, relativePath);
+            var directoryName = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrWhiteSpace(directoryName))
+            {
+                Directory.CreateDirectory(directoryName);
+            }
+
+            await File.WriteAllBytesAsync(destinationPath, contents, cancellationToken);
+        }
+    }
+
+    public static async Task<IReadOnlyDictionary<string, byte[]>> LoadStarterFilesAsync(
+        string versionSpec,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
+    {
         var resolvedVersion = await ResolvePackageVersionAsync(versionSpec, cancellationToken);
         var tarballUrl = $"{NpmRegistryBaseUrl}/govuk-prototype-kit/-/govuk-prototype-kit-{resolvedVersion}.tgz";
 
@@ -107,31 +128,12 @@ internal static class PrototypeKitTarballScaffold
                 $"Unable to read GOV.UK Prototype Kit starter files from npm package {resolvedVersion}.");
         }
 
-        Directory.CreateDirectory(workingDirectory);
-
-        foreach (var (relativePath, contents) in starterFiles)
-        {
-            var destinationPath = Path.Combine(workingDirectory, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-            await File.WriteAllBytesAsync(destinationPath, contents, cancellationToken);
-        }
-
-        await File.WriteAllTextAsync(
-            Path.Combine(workingDirectory, ".gitignore"),
-            GitIgnore,
-            cancellationToken);
-
-        await File.WriteAllTextAsync(
-            Path.Combine(workingDirectory, ".npmrc"),
-            NpmRc,
-            cancellationToken);
+        starterFiles[".gitignore"] = Encoding.UTF8.GetBytes(GitIgnore);
+        starterFiles[".npmrc"] = Encoding.UTF8.GetBytes(NpmRc);
 
         if (licenceContents is not null)
         {
-            await File.WriteAllBytesAsync(
-                Path.Combine(workingDirectory, "LICENCE.txt"),
-                licenceContents,
-                cancellationToken);
+            starterFiles["LICENCE.txt"] = licenceContents;
         }
 
         var packageJson = new JsonObject
@@ -150,17 +152,10 @@ internal static class PrototypeKitTarballScaffold
             }
         };
 
-        var packageJsonPath = Path.Combine(workingDirectory, "package.json");
-        await File.WriteAllTextAsync(
-            packageJsonPath,
-            packageJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine,
-            Encoding.UTF8,
-            cancellationToken);
+        starterFiles["package.json"] = Encoding.UTF8.GetBytes(
+            packageJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
 
-        if (!File.Exists(packageJsonPath))
-        {
-            throw new InvalidOperationException("GOV.UK Prototype Kit scaffolding did not produce a package.json file.");
-        }
+        return starterFiles;
     }
 
     private static async Task<string> ResolvePackageVersionAsync(

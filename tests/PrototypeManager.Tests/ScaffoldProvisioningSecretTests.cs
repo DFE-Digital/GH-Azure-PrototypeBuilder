@@ -96,7 +96,16 @@ public sealed class ScaffoldProvisioningSecretTests
             services.AddScoped<ICostControlPolicy>(_ => new CostControlPolicy(Options.Create(new CostControlOptions())));
             services.AddScoped<IGitHubRepositoryValidator, FormatOnlyGitHubRepositoryValidator>();
             services.AddScoped<IGitHubAccessValidator, FormatOnlyGitHubAccessValidator>();
+            services.AddSingleton<ICompassCatalogService, NullCompassCatalogService>();
+            services.AddSingleton<IGitHubRepositoryAvailability, NullGitHubRepositoryAvailability>();
             services.AddScoped<IAccessManagementService, AccessManagementService>();
+            services.AddScoped<IExceptionRequestNotifier, NullExceptionRequestNotifier>();
+            services.AddScoped<IFeatureSuggestionNotifier, NullFeatureSuggestionNotifier>();
+            services.AddScoped<IGitHubRepositorySearchService, NullGitHubRepositorySearchService>();
+            services.AddScoped<IGitHubPrototypeCodebaseAssessor, NullGitHubPrototypeCodebaseAssessor>();
+            services.AddScoped<IPrototypeReadyNotifier, NullPrototypeReadyNotifier>();
+            services.AddScoped<IFreeAppServicePlanPool, MockFreeAppServicePlanPool>();
+            services.AddScoped<IAppServicePlanSkuService, MockAppServicePlanSkuService>();
             services.AddScoped<AzureWebAppResourceResolver>();
             services.AddScoped<MockPrototypeWebAppRuntimeService>();
             services.AddScoped<AzurePrototypeWebAppRuntimeService>();
@@ -123,6 +132,7 @@ public sealed class ScaffoldProvisioningSecretTests
             }));
             services.AddSingleton(Options.Create(new CostControlOptions()));
             services.AddSingleton(Options.Create(new GitHubOptions { AutoConfigureDeployment = false }));
+            services.AddSingleton(Options.Create(new CompassApiOptions()));
 
             var provider = services.BuildServiceProvider();
             var context = provider.GetRequiredService<PrototypeManagerDbContext>();

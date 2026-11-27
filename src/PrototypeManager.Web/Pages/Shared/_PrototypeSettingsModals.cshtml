@@ -12,22 +12,30 @@
             <header class="dfe-f-modal__header">
                 <h2 class="govuk-heading-m dfe-f-modal__title" id="add-config-var-modal-title">Add app setting</h2>
                 <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
                 </button>
             </header>
             <div class="dfe-f-modal__body" id="add-config-var-modal-description">
                 <p class="govuk-body">Add an environment variable for the hosted prototype app.</p>
                 <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ConfigVarKey)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
                     <label class="govuk-label" for="ConfigVarKey">Key</label>
-                    <span class="govuk-hint">Start with a letter. Use letters, numbers and underscores only.</span>
-                    <span class="govuk-error-message" asp-validation-for="ConfigVarKey"></span>
-                    <input class="govuk-input"
+                    <span class="govuk-hint" id="ConfigVarKey-hint">Start with a letter. Spaces become underscores. Lowercase letters, numbers and underscores only.</span>
+                    @if (ViewData.ModelState[nameof(Model.ConfigVarKey)]?.Errors.Count > 0)
+                    {
+                        <p class="govuk-error-message" id="ConfigVarKey-error">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @ViewData.ModelState[nameof(Model.ConfigVarKey)]!.Errors[0].ErrorMessage
+                        </p>
+                    }
+                    <input class="govuk-input @(ViewData.ModelState[nameof(Model.ConfigVarKey)]?.Errors.Count > 0 ? "govuk-input--error" : string.Empty)"
                            id="ConfigVarKey"
-                           asp-for="ConfigVarKey"
+                           name="ConfigVarKey"
+                           value="@Model.ConfigVarKey"
                            autocomplete="off"
                            spellcheck="false"
                            maxlength="@PrototypeAppSettingCatalog.MaxKeyLength"
-                           pattern="[A-Za-z][A-Za-z0-9_]*"
+                           pattern="[a-z][a-z0-9_]*"
+                           aria-describedby="ConfigVarKey-hint@(ViewData.ModelState[nameof(Model.ConfigVarKey)]?.Errors.Count > 0 ? " ConfigVarKey-error" : string.Empty)"
                            required />
                 </div>
                 <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ConfigVarValue)]?.Errors.Count > 0 ? "govuk-form-group--error" : string.Empty)">
@@ -60,7 +68,7 @@
         <header class="dfe-f-modal__header">
             <h2 class="govuk-heading-m dfe-f-modal__title" id="manage-config-var-modal-title">Manage app setting</h2>
             <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
             </button>
         </header>
         <div class="dfe-f-modal__body" id="manage-config-var-modal-description">

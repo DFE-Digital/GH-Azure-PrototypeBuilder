@@ -22,16 +22,19 @@ internal sealed class GitHubDeploymentService(
     IDeploymentWorkflowGenerator workflowGenerator,
     IPrototypeSiteVerifier prototypeSiteVerifier,
     IAuditService auditService,
-    IOptions<GitHubOptions> githubOptions,
+    IOptionsMonitor<GitHubOptions> githubOptions,
     IOptions<ProvisioningOptions> provisioningOptions,
     ILogger<GitHubDeploymentService> logger) : IGitHubDeploymentService
 {
-    private readonly GitHubOptions _githubOptions = githubOptions.Value;
+    private GitHubOptions GitHub => githubOptions.CurrentValue;
     private readonly ProvisioningOptions _provisioningOptions = provisioningOptions.Value;
 
     public async Task<GitHubDeploymentResult> ConfigureAsync(Prototype prototype, CancellationToken cancellationToken = default)
     {
-        _ = gitHubApiClient.RequireToken();
+        // Mint a fresh installation token so recently accepted App permissions (e.g. Secrets: write) apply.
+        _ = await gitHubApiClient.GetAccessTokenAsync(
+            forceRefresh: GitHub.HasGitHubAppCredentials,
+            cancellationToken);
 
         if (string.IsNullOrWhiteSpace(prototype.AzureWebAppName) ||
             string.IsNullOrWhiteSpace(prototype.AzureResourceGroupName))
@@ -42,23 +45,33 @@ internal sealed class GitHubDeploymentService(
         await gitHubAccessValidator.ValidateForRepositoryAsync(prototype.GitHubRepositoryUrl, cancellationToken);
 
         var (owner, repository) = GitHubRepositoryValidator.ParseRepositoryUrl(prototype.GitHubRepositoryUrl);
-        var (_, workflowBranch) = await GitHubRepositoryMetadata.ResolveWorkflowBranchAsync(
+
+        // Re-apply on configure/retry so repos scaffolded before collaborator support still get access.
+        await GitHubRepositoryCollaboratorAssigner.AssignConfiguredAsync(
             gitHubApiClient,
-            _githubOptions,
+            GitHub,
+            logger,
             owner,
             repository,
             cancellationToken);
 
-        if (!string.Equals(workflowBranch, _githubOptions.WorkflowBranch, StringComparison.OrdinalIgnoreCase))
+        var (_, workflowBranch) = await GitHubRepositoryMetadata.ResolveWorkflowBranchAsync(
+            gitHubApiClient,
+            GitHub,
+            owner,
+            repository,
+            cancellationToken);
+
+        if (!string.Equals(workflowBranch, GitHub.WorkflowBranch, StringComparison.OrdinalIgnoreCase))
         {
             logger.LogInformation(
                 "Using GitHub branch {WorkflowBranch} for prototype {PrototypeId} (configured branch {ConfiguredBranch} was not found).",
                 workflowBranch,
                 prototype.Id,
-                _githubOptions.WorkflowBranch);
+                GitHub.WorkflowBranch);
         }
 
-        var workflowPath = $".github/workflows/{_githubOptions.WorkflowFileName}";
+        var workflowPath = $".github/workflows/{GitHub.WorkflowFileName}";
         var workflowContent = workflowGenerator.Generate(
             prototype,
             new DeploymentWorkflowOptions { UsePublishProfile = true });
@@ -74,14 +87,14 @@ internal sealed class GitHubDeploymentService(
         await UpsertRepositorySecretAsync(
             owner,
             repository,
-            _githubOptions.PublishProfileSecretName,
+            GitHub.PublishProfileSecretName,
             publishProfile,
             cancellationToken);
 
         var commitUrl = await UpsertWorkflowFileAsync(
             owner,
             repository,
-            workflowBranch ?? _githubOptions.WorkflowBranch,
+            workflowBranch ?? GitHub.WorkflowBranch,
             workflowPath,
             workflowContent,
             cancellationToken);
@@ -95,12 +108,12 @@ internal sealed class GitHubDeploymentService(
 
         string? workflowRunUrl = null;
 
-        if (_githubOptions.TriggerInitialDeployment)
+        if (GitHub.TriggerInitialDeployment)
         {
             workflowRunUrl = await TriggerWorkflowAsync(
                 owner,
                 repository,
-                workflowBranch ?? _githubOptions.WorkflowBranch,
+                workflowBranch ?? GitHub.WorkflowBranch,
                 cancellationToken);
 
             await ProvisioningTaskRecorder.RecordCompletedAsync(
@@ -124,7 +137,7 @@ internal sealed class GitHubDeploymentService(
             WorkflowFilePath = workflowPath,
             CommitUrl = commitUrl,
             WorkflowRunUrl = workflowRunUrl,
-            Message = _githubOptions.TriggerInitialDeployment
+            Message = GitHub.TriggerInitialDeployment
                 ? "GitHub workflow committed, publish profile secret saved, initial deployment triggered, and prototype URL verified."
                 : "GitHub workflow committed and publish profile secret saved."
         };
@@ -160,7 +173,7 @@ internal sealed class GitHubDeploymentService(
         string workflowContent,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _githubOptions.ApiBaseUrl.TrimEnd('/');
+        var baseUrl = GitHub.ApiBaseUrl.TrimEnd('/');
         var encodedPath = Uri.EscapeDataString(workflowPath);
         var existingSha = await GetExistingFileShaAsync(
             baseUrl,
@@ -239,7 +252,7 @@ internal sealed class GitHubDeploymentService(
         string secretValue,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _githubOptions.ApiBaseUrl.TrimEnd('/');
+        var baseUrl = GitHub.ApiBaseUrl.TrimEnd('/');
         using var keyResponse = await gitHubApiClient.SendAsync(
             HttpMethod.Get,
             $"{baseUrl}/repos/{owner}/{repository}/actions/secrets/public-key",
@@ -289,13 +302,13 @@ internal sealed class GitHubDeploymentService(
         string workflowBranch,
         CancellationToken cancellationToken)
     {
-        var baseUrl = _githubOptions.ApiBaseUrl.TrimEnd('/');
+        var baseUrl = GitHub.ApiBaseUrl.TrimEnd('/');
         var payload = JsonSerializer.Serialize(new { @ref = workflowBranch });
         using var requestContent = new StringContent(payload, Encoding.UTF8, "application/json");
 
         using var response = await gitHubApiClient.SendAsync(
             HttpMethod.Post,
-            $"{baseUrl}/repos/{owner}/{repository}/actions/workflows/{Uri.EscapeDataString(_githubOptions.WorkflowFileName)}/dispatches",
+            $"{baseUrl}/repos/{owner}/{repository}/actions/workflows/{Uri.EscapeDataString(GitHub.WorkflowFileName)}/dispatches",
             requestContent,
             cancellationToken);
 

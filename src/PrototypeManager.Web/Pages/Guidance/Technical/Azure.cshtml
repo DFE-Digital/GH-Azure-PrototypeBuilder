@@ -1,0 +1,59 @@
+@page
+@model AzureModel
+@using PrototypeManager.Web.Pages.Guidance
+@{
+    ViewData["Title"] = "Azure hosting";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.TechnicalAzure;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Technical documentation</p>
+            <h1 class="dfe-c-fe-title">Azure hosting</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Each prototype gets its own resource group and Linux Node web app, attached to a shared Free App Service plan pool.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">What gets created</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>a dedicated resource group per prototype (naming prefix <code>s186d01-pt-</code>)</li>
+        <li>a Linux web app running Node (<code>NODE|24-lts</code>), HTTPS only, FTPS disabled</li>
+        <li>the web app is attached to an existing Free (F1) App Service plan — not a new plan per prototype</li>
+        <li>standard tags for Environment, Product and Service Offering</li>
+    </ul>
+    <p class="govuk-body">
+        Infrastructure is defined in Bicep, compiled to ARM JSON, and deployed with the Azure SDK (not the Azure CLI).
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Free App Service plan pool</h2>
+    <p class="govuk-body">
+        Azure limits how many Free plans and how many apps per Free plan you can have in a region.
+        Prototype Manager keeps a shared pool of Free plans in a dedicated resource group and assigns new web apps into a plan that still has capacity.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>shared plans resource group (for example <code>s186d01-pt-rg-plans</code>)</li>
+        <li>up to 10 Free plans, up to 10 apps per plan (region quota-aware)</li>
+        <li>deleting a prototype removes its resource group and web app, but leaves empty pool plans in place for reuse</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Temporary higher SKUs</h2>
+    <p class="govuk-body">
+        For short research spikes, Admin can escalate a prototype to a dedicated B1 or B2 plan inside the prototype resource group.
+        When the temporary window expires, a background process moves the app back onto the Free pool.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Cost controls</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>allowed region typically West Europe</li>
+        <li>default allowed SKU F1</li>
+        <li>maximum expiry days enforced in policy</li>
+        <li>users confirm no real user data and not-production use</li>
+    </ul>
+</div>

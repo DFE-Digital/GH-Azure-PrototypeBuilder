@@ -17,6 +17,9 @@ public sealed class SlugGeneratorTests
     {
         Assert.Equal("s186d01-pt-rg-teacher-contacts", PrototypeResourceNaming.CreateResourceGroupName("teacher-contacts"));
         Assert.Equal("s186d01-pt-asp-teacher-contacts", PrototypeResourceNaming.CreateAppServicePlanName("teacher-contacts"));
+        Assert.Equal("s186d01-pt-asp-free-01", PrototypeResourceNaming.CreateFreePoolPlanName(1));
+        Assert.True(PrototypeResourceNaming.IsFreePoolPlanName("s186d01-pt-asp-free-03"));
+        Assert.Equal("s186d01-pt-asp-teacher-contacts-esc", PrototypeResourceNaming.CreateDedicatedEscalationPlanName("teacher-contacts"));
         Assert.Equal("s186d01-pt-app-teacher-contacts", PrototypeResourceNaming.CreateWebAppName("teacher-contacts"));
     }
 
@@ -48,5 +51,26 @@ public sealed class SlugGeneratorTests
     public void ValidateAppName_RejectsUppercase()
     {
         Assert.Throws<ArgumentException>(() => SlugGenerator.ValidateAppName("Teacher-Contacts"));
+    }
+
+    [Fact]
+    public void ValidateAppName_RejectsLeadingDigit()
+    {
+        Assert.Throws<ArgumentException>(() => SlugGenerator.ValidateAppName("1-teacher"));
+    }
+
+    [Fact]
+    public void NormaliseAppName_LowercasesAndHyphenates()
+    {
+        Assert.Equal("teacher-contacts", SlugGenerator.NormaliseAppName("Teacher Contacts"));
+    }
+
+    [Fact]
+    public void CreateRepositoryName_UsesPrototypePrefixAndSuffix()
+    {
+        var name = PrototypeRepositoryNaming.CreateRepositoryName("teacher-contacts", "a1b2");
+
+        Assert.Equal("prototype-a1b2-teacher-contacts", name);
+        Assert.True(name.Length <= PrototypeRepositoryNaming.GitHubRepositoryNameMaxLength);
     }
 }

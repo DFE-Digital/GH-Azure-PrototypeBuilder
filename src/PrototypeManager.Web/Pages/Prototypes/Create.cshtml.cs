@@ -11,11 +11,16 @@ public sealed class CreateModel(
     IPrototypeService prototypeService,
     IAccessManagementService accessManagementService,
     IGitHubOrganisationService githubOrganisationService,
-    IGitHubTokenIdentityService gitHubTokenIdentityService) : PageModel
+    IGitHubTokenIdentityService gitHubTokenIdentityService,
+    ICompassCatalogService compassCatalogService) : PageModel
 {
     public IReadOnlyList<BusinessArea> AvailableBusinessAreas { get; private set; } = [];
     public IReadOnlyList<GitHubOrganisation> AllowedGitHubOrganisations { get; private set; } = [];
+    public IReadOnlyList<CompassWorkItemOption> CompassWorkItems { get; private set; } = [];
+    public IReadOnlyList<CompassProductOption> CompassProducts { get; private set; } = [];
+    public bool CompassConfigured { get; private set; }
     public string? AuthenticatedGitHubLogin { get; private set; }
+    public string RepositoryNamePreview { get; private set; } = string.Empty;
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -29,7 +34,14 @@ public sealed class CreateModel(
             Input.BusinessAreaId = AvailableBusinessAreas[0].Id;
         }
 
-        if (AllowedGitHubOrganisations.Count == 1)
+        var dfeDigital = AllowedGitHubOrganisations.FirstOrDefault(organisation =>
+            string.Equals(organisation.Name, "DFE-Digital", StringComparison.OrdinalIgnoreCase));
+
+        if (dfeDigital is not null)
+        {
+            Input.GitHubOrganisation = dfeDigital.Name;
+        }
+        else if (AllowedGitHubOrganisations.Count == 1)
         {
             Input.GitHubOrganisation = AllowedGitHubOrganisations[0].Name;
         }
@@ -43,13 +55,40 @@ public sealed class CreateModel(
                 Input.GitHubOrganisation = matchingAccount.Name;
             }
         }
+
+        UpdateRepositoryPreview();
     }
+
+    public bool UsesDfeDigitalOrganisation =>
+        AllowedGitHubOrganisations.Any(organisation =>
+            string.Equals(organisation.Name, "DFE-Digital", StringComparison.OrdinalIgnoreCase));
+
+    public bool ShowGitHubOrganisationPicker =>
+        AllowedGitHubOrganisations.Count > 1;
 
     public async Task<IActionResult> OnPostAsync()
     {
         await LoadPageDataAsync();
         Input.GitHubOrganisation = Input.GitHubOrganisation.Trim();
-        Input.GitHubRepositoryName = Input.GitHubRepositoryName.Trim().ToLowerInvariant();
+        Input.AppName = SlugGenerator.NormaliseAppName(Input.AppName);
+        ModelState.Remove("Input.AppName");
+        if (string.IsNullOrWhiteSpace(Input.AppName))
+        {
+            ModelState.AddModelError("Input.AppName", "Enter a prototype app name.");
+        }
+        else
+        {
+            try
+            {
+                SlugGenerator.ValidateAppName(Input.AppName);
+            }
+            catch (ArgumentException exception)
+            {
+                ModelState.AddModelError("Input.AppName", exception.Message);
+            }
+        }
+
+        UpdateRepositoryPreview();
 
         if (AvailableBusinessAreas.Count == 0)
         {
@@ -73,15 +112,25 @@ public sealed class CreateModel(
             ModelState.AddModelError(nameof(Input.GitHubOrganisation), "Select an allowed GitHub organisation.");
         }
 
-        if (string.IsNullOrWhiteSpace(Input.GitHubRepositoryName))
-        {
-            Input.GitHubRepositoryName = Input.AppName.Trim().ToLowerInvariant();
-        }
-
         if (!AvailableBusinessAreas.Any(area => area.Id == Input.BusinessAreaId))
         {
             ModelState.AddModelError(nameof(Input.BusinessAreaId), "Select a business area you are assigned to.");
         }
+
+        if (Input.CompassWorkItemId is int workItemId &&
+            CompassWorkItems.All(item => item.Id != workItemId))
+        {
+            ModelState.AddModelError(nameof(Input.CompassWorkItemId), "Select a valid COMPASS work item.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.CompassProductId) &&
+            CompassProducts.All(product =>
+                !string.Equals(product.Id, Input.CompassProductId, StringComparison.OrdinalIgnoreCase)))
+        {
+            ModelState.AddModelError(nameof(Input.CompassProductId), "Select a valid COMPASS product.");
+        }
+
+        ModelState.Remove(nameof(Input.GitHubRepositoryName));
 
         if (!ModelState.IsValid)
         {
@@ -92,10 +141,11 @@ public sealed class CreateModel(
         {
             var prototype = await prototypeService.CreateScaffoldedAsync(new CreateScaffoldedPrototypeRequest
             {
-                AppName = Input.AppName.Trim().ToLowerInvariant(),
+                AppName = Input.AppName,
                 BusinessAreaId = Input.BusinessAreaId,
                 GitHubOrganisation = Input.GitHubOrganisation,
-                GitHubRepositoryName = Input.GitHubRepositoryName,
+                CompassWorkItemId = Input.CompassWorkItemId,
+                CompassProductId = string.IsNullOrWhiteSpace(Input.CompassProductId) ? null : Input.CompassProductId,
                 PrototypePassword = Input.PrototypePassword,
                 DeclarationAgreed = Input.DeclarationAgreed
             }, User.GetEmail());
@@ -115,6 +165,16 @@ public sealed class CreateModel(
         AvailableBusinessAreas = await accessManagementService.GetVisibleBusinessAreasAsync(User.GetEmail(), User.IsAdmin());
         AllowedGitHubOrganisations = await githubOrganisationService.GetAllAsync();
         AuthenticatedGitHubLogin = await gitHubTokenIdentityService.TryGetAuthenticatedLoginAsync();
+        CompassConfigured = compassCatalogService.IsConfigured;
+        CompassWorkItems = await compassCatalogService.GetActiveWorkItemsAsync();
+        CompassProducts = await compassCatalogService.GetProductsAsync();
+    }
+
+    private void UpdateRepositoryPreview()
+    {
+        RepositoryNamePreview = string.IsNullOrWhiteSpace(Input.AppName)
+            ? $"{PrototypeRepositoryNaming.Prefix}xxxx-"
+            : $"{PrototypeRepositoryNaming.Prefix}xxxx-{Input.AppName}";
     }
 
     public sealed class InputModel
@@ -124,20 +184,22 @@ public sealed class CreateModel(
         public string GitHubOrganisation { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Enter a prototype app name.")]
-        [MaxLength(20)]
-        [RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$", ErrorMessage = "Use lowercase letters, numbers and hyphens only.")]
+        [MaxLength(SlugGenerator.AppNameMaxLength)]
+        [RegularExpression("^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", ErrorMessage = "Start with a letter. Use lowercase letters, numbers and hyphens only.")]
         [Display(Name = "Prototype app name")]
         public string AppName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Enter a repository name.")]
-        [MaxLength(100)]
-        [RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$", ErrorMessage = "Use lowercase letters, numbers and hyphens only.")]
         [Display(Name = "GitHub repository name")]
         public string GitHubRepositoryName { get; set; } = string.Empty;
 
+        [Display(Name = "COMPASS work item")]
+        public int? CompassWorkItemId { get; set; }
+
+        [Display(Name = "COMPASS product")]
+        public string? CompassProductId { get; set; }
+
         [Required(ErrorMessage = "Enter a password.")]
         [MinLength(PrototypePasswordRules.MinimumLength, ErrorMessage = "Password must be at least 3 characters.")]
-        [DataType(DataType.Password)]
         [Display(Name = "Password")]
         public string PrototypePassword { get; set; } = string.Empty;
 

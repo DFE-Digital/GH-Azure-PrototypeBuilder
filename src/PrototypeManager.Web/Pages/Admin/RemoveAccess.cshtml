@@ -1,0 +1,153 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.RemoveAccessModel
+@{
+    ViewData["Title"] = "Remove access";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.RemoveAccessSection;
+}
+
+<h1 class="govuk-heading-l">@AdminNavigation.SectionTitle(AdminNavigation.RemoveAccessSection)</h1>
+<p class="govuk-body">
+    When someone leaves DfE, remove their Prototype Manager access and take them off every prototype they own or manage.
+    Ownership transfers to the deputy owner where one exists, otherwise to another manager on that prototype.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+        </div>
+    </div>
+}
+
+<form method="post" asp-page-handler="Lookup" class="prototype-action-form">
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="Lookup.Email"></label>
+        <div class="govuk-hint">Enter the person’s work email address.</div>
+        <span class="govuk-error-message" asp-validation-for="Lookup.Email"></span>
+        <input class="govuk-input govuk-input--width-20" asp-for="Lookup.Email" autocomplete="off" />
+    </div>
+    <govuk-button class="govuk-button--secondary">Check access</govuk-button>
+</form>
+
+@if (Model.Preview is not null)
+{
+    var preview = Model.Preview;
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-8">Access for @preview.Email</h2>
+
+    <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Display name</dt>
+            <dd class="govuk-summary-list__value">@preview.DisplayName</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Prototype Manager admin</dt>
+            <dd class="govuk-summary-list__value">@(preview.IsAdmin ? "Yes" : "No")</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Business areas</dt>
+            <dd class="govuk-summary-list__value">
+                @(preview.BusinessAreaNames.Any() ? string.Join(", ", preview.BusinessAreaNames) : "None")
+            </dd>
+        </div>
+    </dl>
+
+    @if (preview.BlockedOwnership.Any())
+    {
+        <div class="govuk-warning-text">
+            <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+            <strong class="govuk-warning-text__text">
+                <span class="govuk-visually-hidden">Warning</span>
+                This person owns prototypes with no deputy or manager to take over. Assign a successor on those prototypes before removing access.
+            </strong>
+        </div>
+
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Prototype</th>
+                    <th scope="col" class="govuk-table__header">Role</th>
+                    <th scope="col" class="govuk-table__header">Action needed</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var item in preview.BlockedOwnership)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        <a class="govuk-link" href="@Url.Page("/Prototypes/Details", new { id = item.PrototypeId })">
+                            @item.PrototypeName
+                        </a>
+                    </td>
+                    <td class="govuk-table__cell">@item.Role</td>
+                    <td class="govuk-table__cell">@item.PlannedAction</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    @if (preview.PrototypeAccess.Any())
+    {
+        <h3 class="govuk-heading-s">What will change on prototypes</h3>
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Prototype</th>
+                    <th scope="col" class="govuk-table__header">Current role</th>
+                    <th scope="col" class="govuk-table__header">Planned change</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var item in preview.PrototypeAccess)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        <a class="govuk-link" href="@Url.Page("/Prototypes/Details", new { id = item.PrototypeId })">
+                            @item.PrototypeName
+                        </a>
+                    </td>
+                    <td class="govuk-table__cell">@item.Role</td>
+                    <td class="govuk-table__cell">@item.PlannedAction</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    else if (!preview.BlockedOwnership.Any())
+    {
+        <p class="govuk-body">This person is not listed on any prototypes as owner, deputy, or manager.</p>
+    }
+
+    @if (preview.CanRevoke &&
+         (preview.HasAppUserRecord || preview.PrototypeAccess.Any() || preview.IsAdmin || preview.BusinessAreaNames.Any()))
+    {
+        <form method="post" asp-page-handler="Confirm" class="govuk-!-margin-top-6">
+            <input type="hidden" asp-for="ConfirmEmail" />
+            <div class="govuk-warning-text">
+                <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                <strong class="govuk-warning-text__text">
+                    <span class="govuk-visually-hidden">Warning</span>
+                    This permanently removes their business area access, Prototype Manager admin flag (if set), and prototype roles.
+                </strong>
+            </div>
+            <button type="submit" class="govuk-button govuk-button--warning">
+                Remove all access
+            </button>
+        </form>
+    }
+    else if (preview.CanRevoke)
+    {
+        <p class="govuk-body">There is nothing to remove for this email address.</p>
+    }
+}

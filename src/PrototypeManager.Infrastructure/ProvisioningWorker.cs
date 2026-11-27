@@ -23,6 +23,7 @@ internal sealed class ProvisioningWorker(
             try
             {
                 await ProcessNextJobAsync(stoppingToken);
+                await ProcessExpiredTemporarySkusAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -37,6 +38,21 @@ internal sealed class ProvisioningWorker(
         }
     }
 
+    private async Task ProcessExpiredTemporarySkusAsync(CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var prototypeService = scope.ServiceProvider.GetRequiredService<IPrototypeService>();
+
+        try
+        {
+            await prototypeService.ProcessExpiredTemporarySkusAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Failed while reverting expired temporary App Service plans.");
+        }
+    }
+
     private async Task ProcessNextJobAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
@@ -48,7 +64,7 @@ internal sealed class ProvisioningWorker(
         var rollbackService = scope.ServiceProvider.GetRequiredService<ProvisioningRollbackService>();
         var appSettingsService = scope.ServiceProvider.GetRequiredService<IPrototypeAppSettingsService>();
         var githubRepositoryScaffoldService = scope.ServiceProvider.GetRequiredService<IGitHubRepositoryScaffoldService>();
-        var githubRepositoryDeletionService = scope.ServiceProvider.GetRequiredService<IGitHubRepositoryDeletionService>();
+        var prototypeReadyNotifier = scope.ServiceProvider.GetRequiredService<IPrototypeReadyNotifier>();
 
         var queuedJobs = await dbContext.ProvisioningJobs
             .Include(x => x.Prototype)
@@ -88,7 +104,6 @@ internal sealed class ProvisioningWorker(
                 provisioner,
                 githubDeploymentService,
                 githubRepositoryScaffoldService,
-                githubRepositoryDeletionService,
                 appSettingsService,
                 secretStore,
                 dbContext,
@@ -108,6 +123,13 @@ internal sealed class ProvisioningWorker(
                     prototype.Id,
                     prototype.Slug,
                     ProvisioningTasks.AzureResources);
+
+                await NotifyPrototypeReadyAsync(
+                    prototypeReadyNotifier,
+                    secretStore,
+                    job,
+                    prototype,
+                    cancellationToken);
 
                 await QueueGitHubDeploymentIfNeededAsync(dbContext, auditService, prototype, cancellationToken);
             }
@@ -171,16 +193,21 @@ internal sealed class ProvisioningWorker(
         exception switch
         {
             CredentialUnavailableException =>
-                "Azure sign-in has expired. Run az login, then delete the prototype again.",
+                "Azure sign-in has expired. Run az login, then try again.",
             _ when exception.Message.Contains("DefaultAzureCredential failed", StringComparison.Ordinal) =>
-                "Azure sign-in has expired. Run az login, then delete the prototype again.",
+                "Azure sign-in has expired. Run az login, then try again.",
+            _ when exception.Message.Contains("MaxNumberOfServerFarmsInSkuPerSubscription", StringComparison.Ordinal) ||
+                   exception.Message.Contains("maximum number of Free ServerFarms", StringComparison.OrdinalIgnoreCase) =>
+                "This Azure subscription already has 10 Free (F1) App Service plans — the maximum Azure allows. " +
+                "Prototype Manager shares Free plans across apps; delete unused prototypes (or unused Free plans outside the pool) in Azure, then retry.",
             _ => exception.Message
         };
 
+    // Only tear down Azure when hosting itself failed. Keep existing azurewebsites resources
+    // if GitHub configure/deploy fails so the prototype can be retried without recreate.
     private static bool ShouldRollbackSetup(ProvisioningJobType jobType) =>
         jobType is ProvisioningJobType.Create
             or ProvisioningJobType.Retry
-            or ProvisioningJobType.ConfigureGitHubDeployment
             or ProvisioningJobType.ScaffoldGitHubRepository;
 
     private static ProvisioningJob? SelectNextJob(IReadOnlyList<ProvisioningJob> queuedJobs)
@@ -292,7 +319,6 @@ internal sealed class ProvisioningWorker(
         IPrototypeProvisioner provisioner,
         IGitHubDeploymentService githubDeploymentService,
         IGitHubRepositoryScaffoldService githubRepositoryScaffoldService,
-        IGitHubRepositoryDeletionService githubRepositoryDeletionService,
         IPrototypeAppSettingsService appSettingsService,
         IJobSecretStore secretStore,
         PrototypeManagerDbContext dbContext,
@@ -329,15 +355,17 @@ internal sealed class ProvisioningWorker(
             }
             case ProvisioningJobType.Delete:
             {
+                // Safety: never auto-delete GitHub repositories. Azure hosting is removed,
+                // the manager entry is marked deleted, and scaffolded repos stay in GitHub
+                // for manual cleanup via Admin → GitHub cleanup.
                 await provisioner.DeletePrototypeAsync(prototype, cancellationToken);
-                var githubDeletionMessage = await githubRepositoryDeletionService.DeleteScaffoldedRepositoryAsync(
-                    prototype,
-                    cancellationToken);
                 await RemovePrototypeSecretsAsync(dbContext, secretStore, prototype.Id, cancellationToken);
                 prototype.Status = PrototypeStatus.Deleted;
                 prototype.PrototypeUrl = string.Empty;
                 prototype.GitHubRepositoryUrl = string.Empty;
-                return githubDeletionMessage;
+                return prototype.RequiresRepositoryScaffold
+                    ? "Prototype deleted from Prototype Manager. GitHub repository was left in place for manual cleanup."
+                    : null;
             }
             case ProvisioningJobType.UpdateAppSettings:
                 await appSettingsService.SyncSettingsAsync(prototype, cancellationToken);
@@ -353,6 +381,22 @@ internal sealed class ProvisioningWorker(
         prototype.AzureAppServicePlanName = result.AppServicePlanName;
         prototype.AzureWebAppName = result.WebAppName;
         prototype.PrototypeUrl = result.PrototypeUrl;
+    }
+
+    private static async Task NotifyPrototypeReadyAsync(
+        IPrototypeReadyNotifier prototypeReadyNotifier,
+        IJobSecretStore secretStore,
+        ProvisioningJob job,
+        Prototype prototype,
+        CancellationToken cancellationToken)
+    {
+        string? password = null;
+        if (!string.IsNullOrWhiteSpace(job.SecretReference))
+        {
+            password = await secretStore.GetAsync(job.SecretReference);
+        }
+
+        await prototypeReadyNotifier.NotifyPrototypeReadyAsync(prototype, password, cancellationToken);
     }
 
     private static async Task RemovePrototypeSecretsAsync(

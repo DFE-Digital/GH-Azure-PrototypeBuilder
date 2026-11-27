@@ -1,8 +1,20 @@
-﻿@{
+@using PrototypeManager.Web
+@{
     Layout = "_GovUkPageTemplate";
     ViewData["Title"] ??= "Prototype Manager";
     ViewData["ServiceName"] = "Prototype Manager";
     ViewData["ServiceUrl"] = Url.Page("/Index");
+
+    var requestPath = Context.Request.Path.Value ?? "/";
+    var isDashboard = string.IsNullOrEmpty(requestPath) ||
+                      requestPath == "/" ||
+                      requestPath.Equals("/Index", StringComparison.OrdinalIgnoreCase);
+    var hasCustomSideNav = IsSectionDefined("SideNav");
+    var showAdminSideNav = !hasCustomSideNav &&
+                           User.IsAdmin() &&
+                           requestPath.StartsWith("/Admin", StringComparison.OrdinalIgnoreCase);
+    var showSideNav = !isDashboard;
+    var serviceNavigationInverse = isDashboard || ViewData["ServiceNavigationInverse"] as bool? == true;
 }
 
 @section Head {
@@ -15,20 +27,77 @@
 }
 
 @section GovUkHeader {
-    <govuk-header home-page-url="https://www.gov.uk/" />
+    <div class="app-govuk-header">
+        <header class="govuk-header dfe-f-header" role="banner" data-module="govuk-header">
+            <div class="govuk-header__container govuk-width-container">
+                <div class="govuk-header__logo">
+                    <a href="https://www.gov.uk/government/organisations/department-for-education"
+                       class="govuk-header__homepage-link govuk-header__link govuk-header__link--homepage">
+                        <img src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-white.png"
+                             asp-append-version="true"
+                             alt="Department for Education"
+                             class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--white"
+                             decoding="async" />
+                        <img src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-black.png"
+                             asp-append-version="true"
+                             alt=""
+                             class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--black"
+                             decoding="async"
+                             aria-hidden="true" />
+                    </a>
+                </div>
+            </div>
+        </header>
+        @if (!isDashboard)
+        {
+            <div class="app-govuk-header__actions">
+                <button type="button"
+                        class="app-govuk-header__help"
+                        id="app-help-toggle"
+                        aria-controls="app-help"
+                        aria-expanded="false"
+                        aria-haspopup="dialog"
+                        title="Help">
+                    <span class="govuk-visually-hidden">Open help</span>
+                    <span class="app-govuk-header__help-icon" aria-hidden="true">?</span>
+                </button>
+            </div>
+        }
+    </div>
 }
 
 @section GovUkServiceNavigation {
-    <govuk-service-navigation service-name="Prototype Manager" service-url="@Url.Page("/Index")">
+    <govuk-service-navigation class="@(serviceNavigationInverse ? "govuk-service-navigation--inverse" : null)"
+                              service-name="Prototype Manager"
+                              service-url="@Url.Page("/Index")">
         <govuk-service-navigation-nav>
-            <govuk-service-navigation-nav-item href="@Url.Page("/Index")">Dashboard</govuk-service-navigation-nav-item>
-            <govuk-service-navigation-nav-item href="@Url.Page("/Live")">Live</govuk-service-navigation-nav-item>
-            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/List")">Prototypes</govuk-service-navigation-nav-item>
-            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-service-navigation-nav-item>
-            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/New")">Host prototype</govuk-service-navigation-nav-item>
+            @{
+                // Explicit active/current: GovUk tag helper exact-URL matching drops query strings like ?scope=all
+                var prototypesActive = AppNavigation.IsActive(requestPath, AppNavigation.PrimaryItems[1]);
+                var createActive = AppNavigation.IsActive(requestPath, AppNavigation.PrimaryItems[2]);
+                var hostActive = AppNavigation.IsActive(requestPath, AppNavigation.PrimaryItems[3]);
+                var featuresActive = AppNavigation.IsActive(requestPath, AppNavigation.PrimaryItems[4]);
+                var gettingStartedActive = AppNavigation.IsActive(requestPath, AppNavigation.PrimaryItems[5]);
+                var adminActive = AppNavigation.IsActive(requestPath, AppNavigation.AdminItems[0]);
+            }
+
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/List")"
+                                               active="@prototypesActive"
+                                               current="@(prototypesActive && (requestPath.Equals("/prototypes", StringComparison.OrdinalIgnoreCase) || requestPath.Equals("/Prototypes/List", StringComparison.OrdinalIgnoreCase)))">Prototypes</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/Create")"
+                                               current="@createActive">Create a prototype</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Prototypes/New")"
+                                               current="@hostActive">Host an existing prototype</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/Features")"
+                                               current="@featuresActive">Features</govuk-service-navigation-nav-item>
+            <govuk-service-navigation-nav-item href="@Url.Page("/GettingStarted")"
+                                               active="@gettingStartedActive"
+                                               current="@(requestPath.Equals("/GettingStarted", StringComparison.OrdinalIgnoreCase))">Getting started</govuk-service-navigation-nav-item>
             @if (User.IsAdmin())
             {
-                <govuk-service-navigation-nav-item href="@Url.Page("/Admin/Index")">Admin</govuk-service-navigation-nav-item>
+                <govuk-service-navigation-nav-item href="@Url.Page("/Admin/Index")"
+                                                   active="@adminActive"
+                                                   current="@(requestPath.Equals("/Admin", StringComparison.OrdinalIgnoreCase) || requestPath.Equals("/Admin/Index", StringComparison.OrdinalIgnoreCase))">Admin</govuk-service-navigation-nav-item>
             }
         </govuk-service-navigation-nav>
     </govuk-service-navigation>
@@ -38,17 +107,59 @@
     @await RenderSectionAsync("BeforeContent", required: false)
 }
 
-@RenderBody()
+<div class="app-shell">
+    <div class="app-shell__body @(showSideNav ? "app-shell__body--with-nav" : null)">
+        @if (showSideNav)
+        {
+            <aside class="app-side-nav" aria-label="Section">
+                @if (hasCustomSideNav)
+                {
+                    @await RenderSectionAsync("SideNav")
+                }
+                else if (showAdminSideNav)
+                {
+                    @await Html.PartialAsync("_AdminSideNav")
+                }
+                else
+                {
+                    @await Html.PartialAsync("_PrimarySideNav")
+                }
+            </aside>
+        }
+
+        <main class="app-shell__main" id="main-content">
+            @RenderBody()
+        </main>
+    </div>
+</div>
+
+<div class="app-help-backdrop" id="app-help-backdrop" hidden></div>
+<aside class="app-help-blade"
+       id="app-help"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="app-help-title"
+       hidden>
+    <div class="app-help-blade__chrome">
+        <h2 class="app-help-blade__title" id="app-help-title">Help</h2>
+        <button type="button"
+                class="app-help-blade__close"
+                id="app-help-close"
+                aria-label="Close help">
+            <span aria-hidden="true">×</span>
+        </button>
+    </div>
+    <div class="app-help-blade__content">
+        @await Html.PartialAsync("_AppHelpBlade")
+    </div>
+</aside>
 
 @section GovUkFooter {
     <govuk-footer>
         <govuk-footer-meta>
             <govuk-footer-meta-items>
-                <govuk-footer-meta-item href="@Url.Page("/Index")">Prototype Manager</govuk-footer-meta-item>
-                <govuk-footer-meta-item href="@Url.Page("/Prototypes/List")">All prototypes</govuk-footer-meta-item>
-                <govuk-footer-meta-item href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-footer-meta-item>
-                <govuk-footer-meta-item href="@Url.Page("/Prototypes/New")">Host prototype</govuk-footer-meta-item>
                 <govuk-footer-meta-item href="@Url.Page("/GettingStarted")">How to use Prototype Manager</govuk-footer-meta-item>
+                <govuk-footer-meta-item href="mailto:design.ops@education.gov.uk">Contact DesignOps</govuk-footer-meta-item>
             </govuk-footer-meta-items>
         </govuk-footer-meta>
         <govuk-footer-content-licence />
@@ -59,6 +170,8 @@
 @section BodyEnd {
     @await Html.PartialAsync("_ProcessingModal")
     <script defer src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-frontend.iife.min.js" asp-append-version="true"></script>
+    <script defer src="~/js/app-help-blade.js" asp-append-version="true"></script>
+    <script defer src="~/js/notification-banner-dismiss.js" asp-append-version="true"></script>
     <script>
         window.addEventListener("DOMContentLoaded", function () {
             if (window.DfeFrontend?.initAll) {

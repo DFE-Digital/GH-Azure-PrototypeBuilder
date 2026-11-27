@@ -13,7 +13,26 @@
 }
 
 @section GovUkHeader {
-    <govuk-header home-page-url="https://www.gov.uk/" />
+    <header class="govuk-header dfe-f-header" role="banner" data-module="govuk-header">
+        <div class="govuk-header__container govuk-width-container">
+            <div class="govuk-header__logo">
+                <a href="https://www.gov.uk/government/organisations/department-for-education"
+                   class="govuk-header__homepage-link govuk-header__link govuk-header__link--homepage">
+                    <img src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-white.png"
+                         asp-append-version="true"
+                         alt="Department for Education"
+                         class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--white"
+                         decoding="async" />
+                    <img src="~/_content/DfEDigital.Frontend.AspNetCore/dfe/dfe-logo-black.png"
+                         asp-append-version="true"
+                         alt=""
+                         class="govuk-header__logotype dfe-f-header__logo-img dfe-f-header__logo-img--black"
+                         decoding="async"
+                         aria-hidden="true" />
+                </a>
+            </div>
+        </div>
+    </header>
 }
 
 @section BeforeContent {

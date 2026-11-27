@@ -21,17 +21,21 @@
                         @(Model.Prototype.BusinessArea?.Name ?? "No business area")
                     </dd>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(Model.Prototype.PrototypeUrl))
+                @if (Model.CanViewPassword && !string.IsNullOrWhiteSpace(Model.RevealedPassword))
                 {
-                    <div class="dfe-c-fe-app-header__fact dfe-c-fe-app-header__fact--wide">
-                        <dt class="dfe-c-fe-app-header__fact-label">App URL</dt>
-                        <dd class="dfe-c-fe-app-header__fact-value">
-                            <a class="govuk-link dfe-c-fe-app-header__url"
-                               href="@Model.Prototype.PrototypeUrl"
-                               target="_blank"
-                               rel="noopener noreferrer">
-                                @Model.Prototype.PrototypeUrl
-                            </a>
+                    <div class="dfe-c-fe-app-header__fact dfe-c-fe-app-header__fact--password">
+                        <dt class="dfe-c-fe-app-header__fact-label">Password</dt>
+                        <dd class="dfe-c-fe-app-header__fact-value dfe-c-fe-app-header__password">
+                            <code class="dfe-c-fe-password-field__value">@Model.RevealedPassword</code>
+                            @if (Model.CanManage)
+                            {
+                                <a class="govuk-link dfe-c-fe-app-header__password-manage"
+                                   href="#"
+                                   role="button"
+                                   aria-controls="change-password-modal">
+                                    Manage password
+                                </a>
+                            }
                         </dd>
                     </div>
                 }

@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PrototypeManager.Application;
 using PrototypeManager.Domain;
@@ -10,8 +12,12 @@ internal sealed class PrototypeAppSettingsService(
     PrototypeManagerDbContext dbContext,
     IAuditService auditService,
     AzureWebAppSettingsSyncService azureWebAppSettingsSyncService,
-    IOptions<ProvisioningOptions> provisioningOptions) : IPrototypeAppSettingsService
+    IOptions<ProvisioningOptions> provisioningOptions,
+    ILogger<PrototypeAppSettingsService> logger) : IPrototypeAppSettingsService
 {
+    private static readonly ConcurrentDictionary<Guid, DateTimeOffset> LastAzurePullAt = new();
+    private static readonly TimeSpan AzurePullInterval = TimeSpan.FromSeconds(20);
+
     private readonly ProvisioningOptions _provisioningOptions = provisioningOptions.Value;
 
     public async Task<IReadOnlyList<PrototypeAppSettingView>> GetSettingsAsync(
@@ -22,25 +28,28 @@ internal sealed class PrototypeAppSettingsService(
     {
         var prototype = await GetAccessiblePrototypeAsync(prototypeId, actorEmail, isAdmin, isSupport);
 
+        await TryPullFromAzureAsync(prototype);
+
         var userSettings = await dbContext.PrototypeAppSettings
             .AsNoTracking()
             .Where(setting => setting.PrototypeId == prototype.Id)
             .OrderBy(setting => setting.Key)
             .ToListAsync();
 
-        var pendingSyncJob = HasPendingSyncJob(prototype);
+        var appSettingsJob = GetLatestJob(prototype.Id, ProvisioningJobType.UpdateAppSettings);
+        var passwordJob = GetLatestJob(prototype.Id, ProvisioningJobType.UpdatePassword);
         var lastSuccessfulSyncAt = await GetLastSuccessfulAppSettingsSyncAtAsync(prototype.Id);
+
         var views = userSettings
             .Where(stored => !PrototypeAppSettingCatalog.IsPasswordKey(stored.Key))
             .Select(stored => new PrototypeAppSettingView
-        {
-            Key = stored.Key,
-            Value = stored.Value,
-            IsEditable = true,
-            IsSecret = LooksSecret(stored.Key),
-            IsPendingSync = pendingSyncJob &&
-                (lastSuccessfulSyncAt is null || stored.UpdatedAt > lastSuccessfulSyncAt)
-        }).ToList();
+            {
+                Key = stored.Key,
+                Value = stored.Value,
+                IsEditable = true,
+                IsSecret = LooksSecret(stored.Key),
+                SyncStatus = ResolveOutboundSyncStatus(appSettingsJob, stored.UpdatedAt, lastSuccessfulSyncAt)
+            }).ToList();
 
         views.Add(new PrototypeAppSettingView
         {
@@ -49,7 +58,7 @@ internal sealed class PrototypeAppSettingsService(
             Description = "Password for accessing the hosted prototype.",
             IsEditable = true,
             IsSecret = true,
-            IsPendingSync = HasPendingPasswordJob(prototype.Id)
+            SyncStatus = ResolveJobSyncStatus(passwordJob)
         });
 
         foreach (var systemKey in PrototypeAppSettingCatalog.SystemManagedKeys.OrderBy(key => key))
@@ -61,7 +70,7 @@ internal sealed class PrototypeAppSettingsService(
                 Description = "Managed automatically by Prototype Manager.",
                 IsEditable = false,
                 IsSecret = LooksSecret(systemKey),
-                IsPendingSync = false
+                SyncStatus = AppSettingSyncStatuses.Synced
             });
         }
 
@@ -179,6 +188,118 @@ internal sealed class PrototypeAppSettingsService(
         }
 
         await azureWebAppSettingsSyncService.ApplyUserSettingsAsync(prototype, userSettings, cancellationToken);
+        LastAzurePullAt[prototype.Id] = DateTimeOffset.UtcNow;
+    }
+
+    private async Task TryPullFromAzureAsync(Prototype prototype)
+    {
+        if (!IsSyncApplicable(prototype))
+        {
+            return;
+        }
+
+        if (HasActiveOutboundSync(prototype.Id))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (LastAzurePullAt.TryGetValue(prototype.Id, out var lastPull) &&
+            now - lastPull < AzurePullInterval)
+        {
+            return;
+        }
+
+        try
+        {
+            var azureSettings = await azureWebAppSettingsSyncService.GetApplicationSettingsAsync(prototype);
+            await ReconcileLocalSettingsFromAzureAsync(prototype, azureSettings);
+            LastAzurePullAt[prototype.Id] = now;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Unable to pull app settings from Azure for prototype {PrototypeId}.",
+                prototype.Id);
+        }
+    }
+
+    private async Task ReconcileLocalSettingsFromAzureAsync(
+        Prototype prototype,
+        IReadOnlyDictionary<string, string> azureSettings)
+    {
+        var localSettings = await dbContext.PrototypeAppSettings
+            .Where(setting => setting.PrototypeId == prototype.Id)
+            .ToListAsync();
+
+        var changed = false;
+
+        foreach (var (key, value) in azureSettings)
+        {
+            if (PrototypeAppSettingCatalog.IsProtectedAzureKey(key))
+            {
+                continue;
+            }
+
+            var normalisedKey = PrototypeAppSettingCatalog.NormaliseKey(key);
+            if (!PrototypeAppSettingCatalog.IsValidKeyFormat(normalisedKey))
+            {
+                continue;
+            }
+
+            var local = localSettings.SingleOrDefault(setting =>
+                string.Equals(setting.Key, normalisedKey, StringComparison.OrdinalIgnoreCase));
+
+            if (local is null)
+            {
+                dbContext.PrototypeAppSettings.Add(new PrototypeAppSetting
+                {
+                    PrototypeId = prototype.Id,
+                    Key = normalisedKey,
+                    Value = value,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    UpdatedBy = "azure-portal"
+                });
+                changed = true;
+                continue;
+            }
+
+            if (!string.Equals(local.Value, value, StringComparison.Ordinal) ||
+                !string.Equals(local.Key, normalisedKey, StringComparison.Ordinal))
+            {
+                local.Key = normalisedKey;
+                local.Value = value;
+                local.UpdatedAt = DateTimeOffset.UtcNow;
+                local.UpdatedBy = "azure-portal";
+                changed = true;
+            }
+        }
+
+        foreach (var local in localSettings)
+        {
+            if (PrototypeAppSettingCatalog.IsPasswordKey(local.Key))
+            {
+                continue;
+            }
+
+            var stillPresent = azureSettings.Keys.Any(azureKey =>
+                string.Equals(
+                    PrototypeAppSettingCatalog.NormaliseKey(azureKey),
+                    local.Key,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (!stillPresent)
+            {
+                dbContext.PrototypeAppSettings.Remove(local);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await dbContext.SaveChangesAsync();
+        }
     }
 
     private void QueueSyncJob(Guid prototypeId)
@@ -186,7 +307,11 @@ internal sealed class PrototypeAppSettingsService(
         var alreadyQueued = dbContext.ProvisioningJobs.Local.Any(job =>
             job.PrototypeId == prototypeId &&
             job.Type == ProvisioningJobType.UpdateAppSettings &&
-            (job.Status == ProvisioningJobStatus.Queued || job.Status == ProvisioningJobStatus.Running));
+            (job.Status == ProvisioningJobStatus.Queued || job.Status == ProvisioningJobStatus.Running))
+            || dbContext.ProvisioningJobs.Any(job =>
+                job.PrototypeId == prototypeId &&
+                job.Type == ProvisioningJobType.UpdateAppSettings &&
+                (job.Status == ProvisioningJobStatus.Queued || job.Status == ProvisioningJobStatus.Running));
 
         if (alreadyQueued)
         {
@@ -203,38 +328,54 @@ internal sealed class PrototypeAppSettingsService(
         });
     }
 
-    private bool HasPendingPasswordJob(Guid prototypeId)
+    private bool HasActiveOutboundSync(Guid prototypeId)
     {
-        var latest = dbContext.ProvisioningJobs
-            .AsNoTracking()
-            .Where(job =>
-                job.PrototypeId == prototypeId &&
-                job.Type == ProvisioningJobType.UpdatePassword)
-            .AsEnumerable()
-            .OrderByDescending(job => job.CreatedAt)
-            .FirstOrDefault();
+        var appSettingsJob = GetLatestJob(prototypeId, ProvisioningJobType.UpdateAppSettings);
+        var passwordJob = GetLatestJob(prototypeId, ProvisioningJobType.UpdatePassword);
 
-        return latest?.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running;
+        return IsActive(appSettingsJob) || IsActive(passwordJob);
     }
 
-    private bool HasPendingSyncJob(Prototype prototype)
+    private ProvisioningJob? GetLatestJob(Guid prototypeId, ProvisioningJobType type) =>
+        dbContext.ProvisioningJobs
+            .AsNoTracking()
+            .Where(job => job.PrototypeId == prototypeId && job.Type == type)
+            .AsEnumerable()
+            .OrderByDescending(job => job.CompletedAt ?? job.CreatedAt)
+            .FirstOrDefault();
+
+    private static bool IsActive(ProvisioningJob? job) =>
+        job?.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running;
+
+    private static string ResolveOutboundSyncStatus(
+        ProvisioningJob? job,
+        DateTimeOffset settingUpdatedAt,
+        DateTimeOffset? lastSuccessfulSyncAt)
     {
-        if (!IsSyncApplicable(prototype))
+        if (job is null)
         {
-            return false;
+            return AppSettingSyncStatuses.Synced;
         }
 
-        var latest = dbContext.ProvisioningJobs
-            .AsNoTracking()
-            .Where(job =>
-                job.PrototypeId == prototype.Id &&
-                job.Type == ProvisioningJobType.UpdateAppSettings)
-            .AsEnumerable()
-            .OrderByDescending(job => job.CreatedAt)
-            .FirstOrDefault();
+        var settingNeedsSync = lastSuccessfulSyncAt is null || settingUpdatedAt > lastSuccessfulSyncAt;
 
-        return latest?.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running;
+        return job.Status switch
+        {
+            ProvisioningJobStatus.Queued when settingNeedsSync => AppSettingSyncStatuses.Pending,
+            ProvisioningJobStatus.Running when settingNeedsSync => AppSettingSyncStatuses.Syncing,
+            ProvisioningJobStatus.Failed when settingNeedsSync => AppSettingSyncStatuses.Failed,
+            _ => AppSettingSyncStatuses.Synced
+        };
     }
+
+    private static string ResolveJobSyncStatus(ProvisioningJob? job) =>
+        job?.Status switch
+        {
+            ProvisioningJobStatus.Queued => AppSettingSyncStatuses.Pending,
+            ProvisioningJobStatus.Running => AppSettingSyncStatuses.Syncing,
+            ProvisioningJobStatus.Failed => AppSettingSyncStatuses.Failed,
+            _ => AppSettingSyncStatuses.Synced
+        };
 
     private async Task<DateTimeOffset?> GetLastSuccessfulAppSettingsSyncAtAsync(Guid prototypeId)
     {
@@ -301,8 +442,9 @@ internal sealed class PrototypeAppSettingsService(
 
     private static string ValidateUserKey(string key)
     {
-        PrototypeAppSettingCatalog.ValidateUserKey(key);
-        return key.Trim();
+        var normalised = PrototypeAppSettingCatalog.NormaliseKey(key);
+        PrototypeAppSettingCatalog.ValidateUserKey(normalised);
+        return normalised;
     }
 
     private static string NormaliseReadableKey(string key)
@@ -312,7 +454,7 @@ internal sealed class PrototypeAppSettingsService(
             throw new ValidationException("Enter a key for this app setting.");
         }
 
-        return key.Trim();
+        return PrototypeAppSettingCatalog.NormaliseKey(key);
     }
 
     private async Task<PrototypeAppSetting?> FindUserSettingAsync(

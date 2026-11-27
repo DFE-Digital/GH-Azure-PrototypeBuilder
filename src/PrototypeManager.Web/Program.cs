@@ -10,8 +10,6 @@ using PrototypeManager.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-GitHubConfiguration.ApplyAppsettingsToken(builder);
-
 builder.Services.AddGovUkFrontend();
 builder.Services.AddPrototypeManagerInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddTransient<IClaimsTransformation, AppUserClaimsTransformation>();

@@ -17,6 +17,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UseRazorSourceGenerator>false</UseRazorSourceGenerator>
     <EnableGovUkFrontendSupport>true</EnableGovUkFrontendSupport>
     <UserSecretsId>prototype-manager-web-dev</UserSecretsId>
   </PropertyGroup>

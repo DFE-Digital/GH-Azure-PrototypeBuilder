@@ -142,13 +142,6 @@
         openDialog("add-contact-modal");
     }
 
-    const changeExpiryModal = document.getElementById("change-expiry-modal");
-    const expiryDateGroup = changeExpiryModal?.querySelector(".govuk-form-group--error");
-
-    if (changeExpiryModal && expiryDateGroup) {
-        openDialog("change-expiry-modal");
-    }
-
     const changePasswordModal = document.getElementById("change-password-modal");
     const changePasswordCurrentValue = document.getElementById("change-password-current-value");
 
@@ -200,6 +193,46 @@
     const manageConfigRemoveButton = document.getElementById("manage-config-var-remove-button");
     const manageConfigRemoveForm = document.getElementById("manage-config-var-remove-form");
     const settingsSection = document.getElementById("prototype-app-settings");
+    const addConfigKeyInput = document.getElementById("ConfigVarKey");
+
+    const normaliseConfigKeyInput = (value, finalize = false) => {
+        let normalised = String(value ?? "")
+            .toLowerCase()
+            .replace(/[\s\-.]+/g, "_")
+            .replace(/[^a-z0-9_]/g, "")
+            .replace(/_+/g, "_");
+
+        // Keys must start with a letter — strip leading digits/underscores.
+        normalised = normalised.replace(/^[^a-z]+/, "");
+
+        if (finalize) {
+            normalised = normalised.replace(/_+$/g, "");
+        }
+
+        return normalised;
+    };
+
+    if (addConfigKeyInput) {
+        const applyKeyNormalisation = (finalize = false) => {
+            const caret = addConfigKeyInput.selectionStart;
+            const before = addConfigKeyInput.value;
+            const after = normaliseConfigKeyInput(before, finalize);
+
+            if (before === after) {
+                return;
+            }
+
+            addConfigKeyInput.value = after;
+
+            if (!finalize && typeof caret === "number") {
+                const nextCaret = Math.min(caret, after.length);
+                addConfigKeyInput.setSelectionRange(nextCaret, nextCaret);
+            }
+        };
+
+        addConfigKeyInput.addEventListener("input", () => applyKeyNormalisation(false));
+        addConfigKeyInput.addEventListener("blur", () => applyKeyNormalisation(true));
+    }
 
     const loadManageConfigValue = async (configKey) => {
         if (!manageConfigValueInput || !configKey) {
@@ -301,6 +334,145 @@
         }
     }
 
+    const syncStatusLabels = {
+        pending: "Waiting to sync with Azure",
+        syncing: "Syncing with Azure",
+        synced: "Synced with Azure",
+        failed: "Azure sync failed"
+    };
+
+    const setSyncIconState = (row, status) => {
+        const icon = row.querySelector(".app-setting-sync");
+        if (!icon) {
+            return;
+        }
+
+        const normalised = status || "synced";
+        icon.dataset.syncStatus = normalised;
+        row.dataset.syncStatus = normalised;
+        icon.hidden = normalised === "synced";
+        icon.title = syncStatusLabels[normalised] ?? syncStatusLabels.synced;
+
+        const label = icon.querySelector(".app-setting-sync__label");
+        if (label) {
+            label.textContent = syncStatusLabels[normalised] ?? syncStatusLabels.synced;
+        }
+    };
+
+    const updateSettingValue = (row, setting) => {
+        if (setting.isSecret || setting.displayValue == null) {
+            return;
+        }
+
+        const valueCell = row.querySelector(".prototype-settings-table__value");
+        if (!valueCell) {
+            return;
+        }
+
+        const code = valueCell.querySelector("code");
+        if (code) {
+            code.textContent = setting.displayValue;
+        } else {
+            valueCell.textContent = setting.displayValue;
+        }
+    };
+
+    const dismissSyncBannerIfNeeded = (syncComplete) => {
+        if (!syncComplete) {
+            return;
+        }
+
+        const banner = document.getElementById("prototype-status-banner");
+        if (banner?.dataset.dismissWhenSynced === "true") {
+            banner.hidden = true;
+        }
+    };
+
+    const pollAppSettingsSync = () => {
+        if (!settingsSection) {
+            return;
+        }
+
+        const statusUrl = settingsSection.dataset.settingsStatusUrl ?? "";
+        if (!statusUrl) {
+            return;
+        }
+
+        let hideSyncedTimer = null;
+        const recentlySynced = new Set();
+
+        const refresh = async () => {
+            try {
+                const response = await fetch(statusUrl, {
+                    headers: { Accept: "application/json" },
+                    credentials: "same-origin"
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const payload = await response.json();
+                const settings = payload.settings ?? [];
+                const hasPendingSync = Boolean(payload.hasPendingSync);
+                const syncComplete = Boolean(payload.syncComplete);
+
+                settingsSection.dataset.hasPendingSync = hasPendingSync ? "true" : "false";
+                dismissSyncBannerIfNeeded(syncComplete);
+
+                settings.forEach((setting) => {
+                    const key = setting.key ?? setting.Key;
+                    if (!key) {
+                        return;
+                    }
+
+                    const row = settingsSection.querySelector(`[data-setting-key="${CSS.escape(key)}"]`);
+                    if (!row) {
+                        return;
+                    }
+
+                    const previous = row.dataset.syncStatus || "synced";
+                    const next = setting.syncStatus || setting.SyncStatus || "synced";
+
+                    updateSettingValue(row, {
+                        isSecret: setting.isSecret ?? setting.IsSecret,
+                        displayValue: setting.displayValue ?? setting.DisplayValue
+                    });
+
+                    if (previous !== "synced" && next === "synced") {
+                        setSyncIconState(row, "synced");
+                        row.querySelector(".app-setting-sync")?.removeAttribute("hidden");
+                        recentlySynced.add(key);
+
+                        window.clearTimeout(hideSyncedTimer);
+                        hideSyncedTimer = window.setTimeout(() => {
+                            recentlySynced.forEach((syncedKey) => {
+                                const syncedRow = settingsSection.querySelector(`[data-setting-key="${CSS.escape(syncedKey)}"]`);
+                                if (syncedRow?.dataset.syncStatus === "synced") {
+                                    const icon = syncedRow.querySelector(".app-setting-sync");
+                                    if (icon) {
+                                        icon.hidden = true;
+                                    }
+                                }
+                            });
+                            recentlySynced.clear();
+                        }, 1600);
+                        return;
+                    }
+
+                    setSyncIconState(row, next);
+                });
+            } catch {
+                // Keep polling; transient failures should not break the page.
+            }
+        };
+
+        refresh();
+        window.setInterval(refresh, 3000);
+    };
+
+    pollAppSettingsSync();
+
     const processingModal = window.prototypeManagerProcessingModal;
     const isModifiedNavigationClick = (event) =>
         event.defaultPrevented ||
@@ -340,6 +512,43 @@
             }
 
             showNavigationLoading("Loading", "Switching prototype…");
+        });
+    });
+
+    document.querySelectorAll("[data-copy-text]").forEach(button => {
+        button.addEventListener("click", async () => {
+            const text = button.getAttribute("data-copy-text") ?? "";
+            if (!text) {
+                return;
+            }
+
+            const originalLabel = button.textContent?.trim() || "Copy";
+
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const input = document.createElement("textarea");
+                    input.value = text;
+                    input.setAttribute("readonly", "");
+                    input.style.position = "absolute";
+                    input.style.left = "-9999px";
+                    document.body.appendChild(input);
+                    input.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(input);
+                }
+
+                button.textContent = "Copied";
+                window.setTimeout(() => {
+                    button.textContent = originalLabel;
+                }, 1600);
+            } catch {
+                button.textContent = "Copy failed";
+                window.setTimeout(() => {
+                    button.textContent = originalLabel;
+                }, 1600);
+            }
         });
     });
 })();

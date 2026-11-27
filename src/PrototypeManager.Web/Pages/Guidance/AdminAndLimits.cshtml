@@ -1,0 +1,72 @@
+@page
+@model AdminAndLimitsModel
+@{
+    ViewData["Title"] = "Admin and limits";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.AdminAndLimits;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">User guide</p>
+            <h1 class="dfe-c-fe-title">Admin and limits</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                What admins can do, how free-tier hosting is constrained, and where to get help.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Administration</h2>
+    <p class="govuk-body">
+        Admins use the Admin area in the top navigation to:
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Admin overview</strong> — deployments and system summary</li>
+        <li><strong>Business area access</strong> — assign people to business areas</li>
+        <li><strong>Prototype Manager admins</strong> — grant full admin access</li>
+        <li><strong>Remove access</strong> — revoke access when someone leaves DfE</li>
+        <li><strong>Manage prototypes</strong> — temporary Azure plans, remove managers, delete prototypes</li>
+        <li><strong>GitHub cleanup</strong> — track orphaned repositories for cleanup</li>
+        <li><strong>Exception requests</strong> — review higher-plan requests (DesignOps is emailed when raised)</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Limits and cost control</h2>
+    <p class="govuk-body">
+        Prototype hosting uses the Azure Free tier and is intentionally limited.
+        Each app has a small amount of server processing time per day, used when pages load.
+        Test locally where possible; use hosted prototypes mainly for user research and stakeholder conversations.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>approved regions and SKUs only (typically West Europe, F1)</li>
+        <li>required tags and naming are applied automatically</li>
+        <li>expiry dates are capped by policy</li>
+        <li>you do not need Azure portal access</li>
+    </ul>
+    <p class="govuk-body">
+        Temporary higher SKUs (for example B1) can be granted for short periods through Admin when needed for research spikes.
+        See <a class="govuk-link" href="@Url.Page("/Guidance/Technical/Azure")">Azure hosting</a> for how Free plans are pooled.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Features and suggestions</h2>
+    <p class="govuk-body">
+        The <a class="govuk-link" href="@Url.Page("/Features")">Features</a> page lists what’s available now and what’s coming later.
+        Anyone signed in can suggest a feature; DesignOps is emailed via GOV.UK Notify when that’s configured.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">In-app help</h2>
+    <p class="govuk-body">
+        On any page, select <strong>?</strong> in the GOV.UK header to open contextual help for that screen,
+        with DesignOps contact details at the bottom of the blade.
+    </p>
+
+    <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">
+            For access problems, hosting failures, or GitHub App permission issues, email
+            <a class="govuk-link" href="mailto:design.ops@education.gov.uk">design.ops@education.gov.uk</a>.
+        </p>
+    </div>
+</div>

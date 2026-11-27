@@ -8,10 +8,19 @@
             <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.DashboardSection)">Dashboard</a>
         </li>
         <li class="prototype-side-nav__item @(activeSection == AdminNavigation.UsersSection ? "prototype-side-nav__item--active" : string.Empty)">
-            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.UsersSection)">Manage access</a>
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.UsersSection)">Business area access</a>
         </li>
-        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.GitHubOrganisationsSection ? "prototype-side-nav__item--active" : string.Empty)">
-            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.GitHubOrganisationsSection)">GitHub organisations</a>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.AdminsSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.AdminsSection)">Prototype Manager admins</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.RemoveAccessSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.RemoveAccessSection)">Remove access</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.PrototypesSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.PrototypesSection)">Manage prototypes</a>
+        </li>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.GitHubCleanupSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.GitHubCleanupSection)">GitHub cleanup</a>
         </li>
         <li class="prototype-side-nav__item @(activeSection == AdminNavigation.ExceptionsSection ? "prototype-side-nav__item--active" : string.Empty)">
             <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.ExceptionsSection)">Exception requests</a>

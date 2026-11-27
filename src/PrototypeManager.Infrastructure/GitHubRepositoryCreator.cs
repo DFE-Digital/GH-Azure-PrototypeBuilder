@@ -20,20 +20,19 @@ internal static class GitHubRepositoryCreator
         bool allowExisting = false)
     {
         var baseUrl = githubOptions.ApiBaseUrl.TrimEnd('/');
-        var authenticatedLogin = await identityService.GetAuthenticatedLoginAsync(cancellationToken);
         var createUrl = await ResolveCreateUrlAsync(
             identityService,
+            githubOptions,
             baseUrl,
             owner,
-            authenticatedLogin,
             cancellationToken);
 
         logger.LogInformation(
-            "Creating GitHub repository {Owner}/{Repository} using token for {AuthenticatedLogin} via {CreateUrl}.",
+            "Creating GitHub repository {Owner}/{Repository} via {CreateUrl} using {AuthMode}.",
             owner,
             repository,
-            authenticatedLogin,
-            createUrl);
+            createUrl,
+            githubOptions.HasGitHubAppCredentials ? "GitHubApp" : "PersonalAccessToken");
 
         using var requestContent = new StringContent(
             JsonSerializer.Serialize(new Dictionary<string, object>
@@ -41,7 +40,8 @@ internal static class GitHubRepositoryCreator
                 ["name"] = repository,
                 ["description"] = "GOV.UK Prototype Kit prototype created via Prototype Manager",
                 ["private"] = true,
-                ["auto_init"] = false
+                // Required so the Git Data API can create blobs; empty repos return 409.
+                ["auto_init"] = true
             }),
             Encoding.UTF8,
             "application/json");
@@ -55,10 +55,9 @@ internal static class GitHubRepositoryCreator
         if (response.IsSuccessStatusCode)
         {
             logger.LogInformation(
-                "Created GitHub repository {Owner}/{Repository} using token for {AuthenticatedLogin}.",
+                "Created GitHub repository {Owner}/{Repository}.",
                 owner,
-                repository,
-                authenticatedLogin);
+                repository);
             return;
         }
 
@@ -82,7 +81,11 @@ internal static class GitHubRepositoryCreator
 
         if (createUrl.Contains("/orgs/", StringComparison.Ordinal))
         {
-            throw GitHubApiErrors.CreateRepositoryException(response.StatusCode, owner, responseBody);
+            throw GitHubApiErrors.CreateRepositoryException(
+                response.StatusCode,
+                owner,
+                responseBody,
+                githubOptions.HasGitHubAppCredentials);
         }
 
         if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
@@ -114,11 +117,26 @@ internal static class GitHubRepositoryCreator
 
     private static async Task<string> ResolveCreateUrlAsync(
         GitHubTokenIdentityService identityService,
+        GitHubOptions githubOptions,
         string baseUrl,
         string owner,
-        string authenticatedLogin,
         CancellationToken cancellationToken)
     {
+        // GitHub App installation tokens cannot call /user or /user/repos.
+        if (githubOptions.HasGitHubAppCredentials)
+        {
+            if (!await identityService.IsOrganisationAsync(owner, cancellationToken))
+            {
+                throw new ValidationException(
+                    $"GitHub organisation '{owner}' was not found, or the GitHub App installation cannot access it. " +
+                    "Confirm the organisation is listed in Admin and that the app is installed on that organisation.");
+            }
+
+            return $"{baseUrl}/orgs/{owner}/repos";
+        }
+
+        var authenticatedLogin = await identityService.GetAuthenticatedLoginAsync(cancellationToken);
+
         if (string.Equals(owner, authenticatedLogin, StringComparison.OrdinalIgnoreCase))
         {
             return $"{baseUrl}/user/repos";

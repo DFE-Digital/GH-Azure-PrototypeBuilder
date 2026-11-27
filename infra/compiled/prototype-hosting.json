@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "1434922450386782800"
+      "templateHash": "8864268245340873506"
     }
   },
   "parameters": {
@@ -15,10 +15,10 @@
         "description": "Azure region for the prototype hosting resources."
       }
     },
-    "appServicePlanName": {
+    "appServicePlanId": {
       "type": "string",
       "metadata": {
-        "description": "Name of the Linux App Service plan."
+        "description": "Resource ID of an existing Linux App Service plan (shared Free pool or dedicated escalation plan)."
       }
     },
     "webAppName": {
@@ -49,22 +49,6 @@
   },
   "resources": [
     {
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2023-12-01",
-      "name": "[parameters('appServicePlanName')]",
-      "location": "[parameters('location')]",
-      "kind": "linux",
-      "sku": {
-        "name": "F1",
-        "tier": "Free",
-        "capacity": 1
-      },
-      "properties": {
-        "reserved": true
-      },
-      "tags": "[parameters('tags')]"
-    },
-    {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2023-12-01",
       "name": "[parameters('webAppName')]",
@@ -72,7 +56,7 @@
       "kind": "app,linux",
       "tags": "[parameters('tags')]",
       "properties": {
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "serverFarmId": "[parameters('appServicePlanId')]",
         "httpsOnly": true,
         "siteConfig": {
           "linuxFxVersion": "[parameters('nodeRuntime')]",
@@ -97,10 +81,7 @@
             }
           ]
         }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
-      ]
+      }
     }
   ],
   "outputs": {

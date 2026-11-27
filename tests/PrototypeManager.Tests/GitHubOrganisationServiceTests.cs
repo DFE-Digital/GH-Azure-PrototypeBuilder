@@ -41,20 +41,8 @@ public sealed class GitHubOrganisationServiceTests
             service.ValidateRepositoryUrlAsync("https://github.com/andyjones81/private-repo"));
     }
 
-    [Fact]
-    public async Task AddAsync_ParsesOrganisationUrl()
-    {
-        await using var context = await CreateContextAsync();
-        var service = CreateService(context);
-
-        await service.AddAsync("https://github.com/andyjones81", "admin@education.gov.uk");
-
-        var organisation = await context.GitHubOrganisations.SingleAsync();
-        Assert.Equal("andyjones81", organisation.Name);
-    }
-
     private static GitHubOrganisationService CreateService(PrototypeManagerDbContext context) =>
-        new(context, new AuditService(context));
+        new(context);
 
     private static async Task<PrototypeManagerDbContext> CreateContextAsync()
     {

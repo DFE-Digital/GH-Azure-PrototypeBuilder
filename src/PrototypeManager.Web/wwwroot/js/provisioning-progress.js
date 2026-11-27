@@ -7,6 +7,7 @@
     const progressUrl = root.dataset.progressUrl;
     const defaultAdminUrl = root.dataset.adminUrl;
     const tasksList = document.getElementById("provisioning-progress-tasks");
+    const retryFormsHold = document.getElementById("provisioning-progress-retry-forms");
     const summary = document.getElementById("provisioning-progress-summary");
     const statusBadge = document.getElementById("provisioning-progress-status-badge");
     const progressPanel = document.getElementById("provisioning-progress-panel");
@@ -17,15 +18,14 @@
     const completePanel = document.getElementById("provisioning-progress-complete");
     const failedPanel = document.getElementById("provisioning-progress-failed");
     const failedSummary = document.getElementById("provisioning-progress-failed-summary");
-    const failedErrorElement = document.getElementById("provisioning-progress-failed-error");
-    const retryActions = document.getElementById("provisioning-progress-retry-actions");
-    const retryScaffoldForm = document.getElementById("provisioning-progress-retry-scaffold");
-    const retryProvisioningForm = document.getElementById("provisioning-progress-retry-provisioning");
-    const retryGitHubForm = document.getElementById("provisioning-progress-retry-github");
     const liveUrlButton = document.getElementById("provisioning-progress-live-url");
     const adminUrlButton = document.getElementById("provisioning-progress-admin-url");
     const failedUrlButton = document.getElementById("provisioning-progress-failed-url");
+    const failedManageUrlButton = document.getElementById("provisioning-progress-failed-manage-url");
     const statusNotification = document.getElementById("setup-status-notification");
+    const stageCurrentLabel = document.getElementById("setup-stage-current-label");
+    const stageCurrentBody = document.getElementById("setup-stage-current-body");
+    const stageList = document.getElementById("setup-stage-list");
     const pollIntervalMs = 3000;
 
     const statusClasses = {
@@ -71,21 +71,55 @@
         .replaceAll(">", "&gt;")
         .replaceAll("\"", "&quot;");
 
-    const renderTaskError = (task, errorMessage) => {
-        if (task.status !== "Failed" || !errorMessage) {
-            return "";
+    const stashRetryForms = () => {
+        if (!retryFormsHold) {
+            return;
         }
 
-        return `<details class="setup-task-list__error-details">
-            <summary class="setup-task-list__error-summary">View error details</summary>
-            <pre class="setup-task-list__error-message">${escapeHtml(errorMessage)}</pre>
-        </details>`;
+        document.querySelectorAll("[data-task-retry-slot] form.setup-page__retry-form").forEach((form) => {
+            form.hidden = true;
+            retryFormsHold.appendChild(form);
+        });
     };
 
-    const renderTasks = (tasks, errorMessage) => {
+    const getRetryTemplate = (kind) => {
+        if (!retryFormsHold) {
+            return null;
+        }
+
+        return retryFormsHold.querySelector(`form[data-retry-kind="${kind}"]`);
+    };
+
+    const placeRetryForm = (slot, kind, label) => {
+        const template = getRetryTemplate(kind);
+        if (!slot || !template) {
+            return;
+        }
+
+        const labelElement = template.querySelector("[data-retry-label]");
+        if (labelElement && label) {
+            labelElement.textContent = label;
+        }
+
+        template.hidden = false;
+        slot.hidden = false;
+        slot.appendChild(template);
+    };
+
+    const renderTasks = (tasks, retry) => {
         if (!tasksList) {
             return;
         }
+
+        stashRetryForms();
+
+        const failedTaskId = retry?.failedTaskId ?? null;
+        const canRetryScaffold = Boolean(retry?.canRetryScaffold);
+        const canRetryProvisioning = Boolean(retry?.canRetryProvisioning);
+        const canRetryGitHubDeployment = Boolean(retry?.canRetryGitHubDeployment);
+        const blockedReason = retry?.retryBlockedReason ?? "";
+        const retryLabel = retry?.retryButtonLabel || "Retry this step";
+        const canRetry = canRetryScaffold || canRetryProvisioning || canRetryGitHubDeployment;
 
         tasksList.innerHTML = tasks.map((task, index) => {
             const statusClass = statusClasses[task.status] ?? "setup-task-list__item--pending";
@@ -93,6 +127,11 @@
             const statusLabel = statusLabels[task.status] ?? statusLabels.Pending;
             const hint = task.description
                 ? `<p class="setup-task-list__hint">${escapeHtml(task.description)}</p>`
+                : "";
+            const isFailedTask = task.status === "Failed";
+            const isRetryTarget = isFailedTask && failedTaskId && task.id === failedTaskId;
+            const blockedMarkup = isRetryTarget && !canRetry && blockedReason
+                ? `<p class="setup-task-list__retry-blocked">${escapeHtml(blockedReason)}</p>`
                 : "";
 
             return `<li class="setup-task-list__item ${statusClass}" data-task-id="${escapeHtml(task.id)}">
@@ -103,10 +142,29 @@
                         <span class="${badgeClass}">${statusLabel}</span>
                     </div>
                     ${hint}
-                    ${renderTaskError(task, errorMessage)}
+                    <div class="setup-task-list__retry" data-task-retry-slot hidden></div>
+                    ${blockedMarkup}
                 </div>
             </li>`;
         }).join("");
+
+        if (!canRetry || !failedTaskId) {
+            return;
+        }
+
+        const failedItem = tasksList.querySelector(`[data-task-id="${CSS.escape(failedTaskId)}"]`);
+        const slot = failedItem?.querySelector("[data-task-retry-slot]");
+        if (!slot) {
+            return;
+        }
+
+        if (canRetryScaffold) {
+            placeRetryForm(slot, "scaffold", retryLabel);
+        } else if (canRetryProvisioning) {
+            placeRetryForm(slot, "provisioning", retryLabel);
+        } else if (canRetryGitHubDeployment) {
+            placeRetryForm(slot, "github", retryLabel);
+        }
     };
 
     const updateProgressMetrics = (tasks) => {
@@ -206,32 +264,20 @@
         content.appendChild(details);
     };
 
-    const updateRetryActions = (data) => {
-        const canRetryProvisioning = Boolean(data.canRetryProvisioning);
-        const canRetryScaffold = Boolean(data.canRetryScaffold);
-        const canRetryGitHubDeployment = Boolean(data.canRetryGitHubDeployment);
+    const updateFailedSummary = (data) => {
+        if (!failedSummary) {
+            return;
+        }
+
+        const canRetry = Boolean(data.canRetryProvisioning || data.canRetryScaffold || data.canRetryGitHubDeployment);
         const blockedReason = data.retryBlockedReason ?? "";
 
-        if (failedSummary) {
-            if (canRetryProvisioning || canRetryScaffold || canRetryGitHubDeployment) {
-                failedSummary.textContent = "Fix the issue if you can, then retry the failed step below.";
-            } else if (blockedReason) {
-                failedSummary.textContent = blockedReason;
-            } else {
-                failedSummary.textContent = "Review the failed task above. Retry if you can, or delete this prototype and start again.";
-            }
-        }
-
-        if (retryScaffoldForm) {
-            retryScaffoldForm.hidden = !canRetryScaffold;
-        }
-
-        if (retryProvisioningForm) {
-            retryProvisioningForm.hidden = !canRetryProvisioning;
-        }
-
-        if (retryGitHubForm) {
-            retryGitHubForm.hidden = !canRetryGitHubDeployment;
+        if (canRetry) {
+            failedSummary.textContent = "Fix the issue if you can, then use Retry on the failed step above.";
+        } else if (blockedReason) {
+            failedSummary.textContent = blockedReason;
+        } else {
+            failedSummary.textContent = "Review the failed task above. Retry if you can, or delete this prototype and start again.";
         }
     };
 
@@ -244,10 +290,58 @@
         statusNotification.hidden = !showNotification;
     };
 
+    const resolveCurrentStage = (tasks, isComplete) => {
+        if (isComplete) {
+            return null;
+        }
+
+        return tasks.find((task) => task.status === "InProgress" || task.status === "Failed")
+            ?? tasks.find((task) => task.status === "Pending")
+            ?? null;
+    };
+
+    const updateGuidance = (data) => {
+        if (!stageList) {
+            return;
+        }
+
+        const tasks = data.tasks ?? [];
+        const current = resolveCurrentStage(tasks, data.isComplete);
+        const currentId = current?.id ?? null;
+
+        stageList.querySelectorAll("[data-stage-id]").forEach((item) => {
+            const isCurrent = currentId && item.dataset.stageId === currentId;
+            item.classList.toggle("setup-page__guidance-stage--current", Boolean(isCurrent));
+        });
+
+        if (stageCurrentLabel) {
+            stageCurrentLabel.textContent = data.isComplete
+                ? "Setup complete"
+                : (current
+                    ? (document.querySelector(`[data-stage-id="${CSS.escape(current.id)}"]`)?.dataset.stageLabel
+                        ?? current.label)
+                    : "Getting ready");
+        }
+
+        if (stageCurrentBody) {
+            if (data.isComplete) {
+                stageCurrentBody.textContent =
+                    "Hosting is ready. You can open the live prototype or manage settings from the details page.";
+            } else if (currentId) {
+                const stageItem = stageList.querySelector(`[data-stage-id="${CSS.escape(currentId)}"]`);
+                stageCurrentBody.textContent = stageItem?.dataset.stageExplanation
+                    ?? "Prototype Manager is preparing the next setup step.";
+            } else {
+                stageCurrentBody.textContent = "Prototype Manager is preparing the next setup step.";
+            }
+        }
+    };
+
     const updatePage = (data) => {
         if (data.tasks?.length) {
-            renderTasks(data.tasks, data.errorMessage);
+            renderTasks(data.tasks, data);
             updateProgressMetrics(data.tasks);
+            updateGuidance(data);
         }
 
         if (summary) {
@@ -280,15 +374,9 @@
 
         if (data.isFailed) {
             updateFailedPanelError(data.errorMessage);
-            updateRetryActions(data);
+            updateFailedSummary(data);
         } else {
-            if (retryProvisioningForm) {
-                retryProvisioningForm.hidden = true;
-            }
-
-            if (retryGitHubForm) {
-                retryGitHubForm.hidden = true;
-            }
+            stashRetryForms();
         }
 
         const adminUrl = data.adminUrl || defaultAdminUrl;
@@ -298,6 +386,10 @@
 
         if (failedUrlButton && adminUrl) {
             failedUrlButton.href = adminUrl;
+        }
+
+        if (failedManageUrlButton && adminUrl) {
+            failedManageUrlButton.href = adminUrl;
         }
 
         if (liveUrlButton && data.prototypeUrl) {
@@ -325,6 +417,38 @@
             // Keep polling; transient network errors are expected during long jobs.
         }
     };
+
+    const placeInitialRetry = () => {
+        if (!retryFormsHold) {
+            return;
+        }
+
+        const failedTaskId = retryFormsHold.dataset.initialFailedTaskId;
+        const canRetryScaffold = retryFormsHold.dataset.initialCanRetryScaffold === "true";
+        const canRetryProvisioning = retryFormsHold.dataset.initialCanRetryProvisioning === "true";
+        const canRetryGitHub = retryFormsHold.dataset.initialCanRetryGithub === "true";
+        const retryLabel = retryFormsHold.dataset.initialRetryLabel || "Retry this step";
+
+        if (!failedTaskId || !(canRetryScaffold || canRetryProvisioning || canRetryGitHub)) {
+            return;
+        }
+
+        const failedItem = tasksList?.querySelector(`[data-task-id="${CSS.escape(failedTaskId)}"]`);
+        const slot = failedItem?.querySelector("[data-task-retry-slot]");
+        if (!slot) {
+            return;
+        }
+
+        if (canRetryScaffold) {
+            placeRetryForm(slot, "scaffold", retryLabel);
+        } else if (canRetryProvisioning) {
+            placeRetryForm(slot, "provisioning", retryLabel);
+        } else if (canRetryGitHub) {
+            placeRetryForm(slot, "github", retryLabel);
+        }
+    };
+
+    placeInitialRetry();
 
     const pollTimer = window.setInterval(refresh, pollIntervalMs);
     refresh();

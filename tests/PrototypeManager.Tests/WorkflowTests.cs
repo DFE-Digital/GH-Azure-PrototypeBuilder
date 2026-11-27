@@ -61,7 +61,9 @@ public sealed class WorkflowTests
             .ToList();
 
         Assert.True(storedPrototype.RequiresRepositoryScaffold);
-        Assert.Equal("https://github.com/department-for-education/new-kit-proto", storedPrototype.GitHubRepositoryUrl);
+        Assert.Matches(
+            @"^https://github\.com/department-for-education/prototype-[a-z0-9]{4}-new-kit-proto$",
+            storedPrototype.GitHubRepositoryUrl);
         Assert.Single(jobs);
         Assert.Equal(ProvisioningJobType.ScaffoldGitHubRepository, jobs[0].Type);
         Assert.False(string.IsNullOrWhiteSpace(jobs[0].SecretReference));
@@ -445,7 +447,16 @@ public sealed class WorkflowTests
             services.AddScoped<ICostControlPolicy>(_ => new CostControlPolicy(Options.Create(new CostControlOptions())));
             services.AddScoped<IGitHubRepositoryValidator, FormatOnlyGitHubRepositoryValidator>();
             services.AddScoped<IGitHubAccessValidator, FormatOnlyGitHubAccessValidator>();
+            services.AddSingleton<ICompassCatalogService, NullCompassCatalogService>();
+            services.AddSingleton<IGitHubRepositoryAvailability, NullGitHubRepositoryAvailability>();
             services.AddScoped<IAccessManagementService, AccessManagementService>();
+            services.AddScoped<IExceptionRequestNotifier, NullExceptionRequestNotifier>();
+            services.AddScoped<IFeatureSuggestionNotifier, NullFeatureSuggestionNotifier>();
+            services.AddScoped<IGitHubRepositorySearchService, NullGitHubRepositorySearchService>();
+            services.AddScoped<IGitHubPrototypeCodebaseAssessor, NullGitHubPrototypeCodebaseAssessor>();
+            services.AddScoped<IPrototypeReadyNotifier, NullPrototypeReadyNotifier>();
+            services.AddScoped<IFreeAppServicePlanPool, MockFreeAppServicePlanPool>();
+            services.AddScoped<IAppServicePlanSkuService, MockAppServicePlanSkuService>();
             services.AddScoped<AzureWebAppResourceResolver>();
             services.AddScoped<MockPrototypeWebAppRuntimeService>();
             services.AddScoped<AzurePrototypeWebAppRuntimeService>();
@@ -469,6 +480,7 @@ public sealed class WorkflowTests
                     : new MockPrototypeProvisioner(
                         sp.GetRequiredService<IOptions<ProvisioningOptions>>(),
                         sp.GetRequiredService<IOptions<CostControlOptions>>(),
+                        sp.GetRequiredService<IFreeAppServicePlanPool>(),
                         sp.GetRequiredService<IAuditService>(),
                         sp.GetRequiredService<ILogger<MockPrototypeProvisioner>>()));
             services.AddSingleton(Options.Create(new ProvisioningOptions
@@ -479,6 +491,7 @@ public sealed class WorkflowTests
             }));
             services.AddSingleton(Options.Create(new CostControlOptions()));
             services.AddSingleton(Options.Create(new GitHubOptions { AutoConfigureDeployment = false }));
+            services.AddSingleton(Options.Create(new CompassApiOptions()));
 
             var provider = services.BuildServiceProvider();
             var context = provider.GetRequiredService<PrototypeManagerDbContext>();

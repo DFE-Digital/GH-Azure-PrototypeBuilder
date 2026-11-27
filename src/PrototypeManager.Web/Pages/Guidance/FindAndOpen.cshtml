@@ -1,0 +1,59 @@
+@page
+@model FindAndOpenModel
+@{
+    ViewData["Title"] = "Find and open";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.FindAndOpen;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">User guide</p>
+            <h1 class="dfe-c-fe-title">Find and open</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Use the dashboard for a quick view, the prototypes list to filter and search, then Open for the live site.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Dashboard</h2>
+    <p class="govuk-body">
+        The <a class="govuk-link" href="@Url.Page("/Index")">dashboard</a> summarises prototypes you can access.
+        When you have none yet, it offers Create and Host. When you do, it shows recent prototypes, counts, and failed deployments that need attention.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Prototypes list</h2>
+    <p class="govuk-body">
+        <a class="govuk-link" href="@Url.Page("/Prototypes/List")">Prototypes</a> is the full list. The left navigation filters by:
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Your prototypes</strong> — you’re the owner, deputy, or a named contact</li>
+        <li><strong>All prototypes</strong> — everything visible to you, including via business area</li>
+        <li><strong>Teams</strong> — prototypes grouped by business area, with counts</li>
+    </ul>
+    <p class="govuk-body">
+        Search and status chips narrow the list. Each row shows the business area and a link to the GitHub repository when available.
+        Use <strong>Manage</strong> for details, or <strong>Open</strong> when a live URL exists.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Open and password</h2>
+    <p class="govuk-body">
+        Prototypes are password protected. Open starts the site if needed and takes you to the live URL.
+        Change the password from Overview (or the password page) if you have permission.
+        The new password is not shown again after you save, so store it safely before you share it.
+    </p>
+
+    <p class="govuk-body govuk-!-margin-top-6">
+        For what’s available in the product and what’s planned, see
+        <a class="govuk-link" href="@Url.Page("/Features")">Features</a>.
+    </p>
+
+    <div class="govuk-button-group govuk-!-margin-top-6">
+        <govuk-button-link href="@Url.Page("/Prototypes/List")">View prototypes</govuk-button-link>
+        <govuk-button-link href="@Url.Page("/Index")" class="govuk-button--secondary">Go to dashboard</govuk-button-link>
+    </div>
+</div>

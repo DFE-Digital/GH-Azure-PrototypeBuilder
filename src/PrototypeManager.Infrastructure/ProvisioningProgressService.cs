@@ -24,23 +24,26 @@ internal sealed class ProvisioningProgressService(IOptions<GitHubOptions> github
             job.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running);
 
         var applicableTasks = ResolveApplicableTasks(prototype, jobs, completedTasks);
-        var failedTaskId = ResolveFailedTaskId(jobs, completedTasks, applicableTasks);
-        var failedJob = jobs
-            .Where(job => job.Status == ProvisioningJobStatus.Failed)
+        var failedTaskId = ResolveFailedTaskId(jobs, completedTasks);
+        var failedSetupJob = jobs
+            .Where(job => IsSetupJob(job.Type) && job.Status == ProvisioningJobStatus.Failed)
             .OrderByDescending(job => job.CompletedAt ?? job.CreatedAt)
             .FirstOrDefault();
 
         var tasks = BuildTaskItems(prototype, applicableTasks, completedTasks, failedTaskId, jobs, hasActiveSetupJob);
-        var isComplete = applicableTasks.All(task => completedTasks.Contains(task.Id))
+        var allTasksCompleted = applicableTasks.All(task => completedTasks.Contains(task.Id));
+        var isComplete = allTasksCompleted
             && tasks.All(task => !string.Equals(task.Status, ProvisioningTaskState.Failed.ToString(), StringComparison.Ordinal));
-        var isFailed = failedTaskId is not null || prototype.Status == PrototypeStatus.Failed;
+        // Non-setup jobs (app settings, password) must not reopen setup. Only setup job failures or Failed status during incomplete setup count.
+        var isFailed = failedTaskId is not null
+            || (prototype.Status == PrototypeStatus.Failed && !allTasksCompleted);
 
         return new ProvisioningProgressSnapshot
         {
             IsActive = hasActiveSetupJob,
             IsComplete = isComplete && !hasActiveSetupJob && !isFailed,
             IsFailed = isFailed,
-            ErrorMessage = failedJob?.ErrorMessage,
+            ErrorMessage = failedSetupJob?.ErrorMessage,
             PrototypeUrl = prototype.PrototypeUrl,
             Tasks = tasks
         };
@@ -64,7 +67,14 @@ internal sealed class ProvisioningProgressService(IOptions<GitHubOptions> github
             return false;
         }
 
-        return Build(prototype, jobs, auditEvents).Tasks.Count > 0;
+        var progress = Build(prototype, jobs, auditEvents);
+        if (progress.Tasks.Count == 0)
+        {
+            return false;
+        }
+
+        // Keep users on Details once setup finished; later operational jobs must not reopen Setup.
+        return !progress.IsComplete;
     }
 
     private IReadOnlyList<ProvisioningTaskDefinition> ResolveApplicableTasks(
@@ -96,20 +106,20 @@ internal sealed class ProvisioningProgressService(IOptions<GitHubOptions> github
 
     private static string? ResolveFailedTaskId(
         IReadOnlyList<ProvisioningJob> jobs,
-        HashSet<string> completedTasks,
-        IReadOnlyList<ProvisioningTaskDefinition> applicableTasks)
+        HashSet<string> completedTasks)
     {
-        var latestFailedJob = jobs
-            .Where(job => job.Status == ProvisioningJobStatus.Failed)
+        // Only the latest setup job matters. Operational jobs (app settings, password) are ignored.
+        var latestSetupJob = jobs
+            .Where(job => IsSetupJob(job.Type))
             .OrderByDescending(job => job.CompletedAt ?? job.CreatedAt)
             .FirstOrDefault();
 
-        if (latestFailedJob is null)
+        if (latestSetupJob?.Status != ProvisioningJobStatus.Failed)
         {
             return null;
         }
 
-        return latestFailedJob.Type switch
+        return latestSetupJob.Type switch
         {
             ProvisioningJobType.ScaffoldGitHubRepository =>
                 completedTasks.Contains(ProvisioningTasks.GitHubCreateRepository)
@@ -120,7 +130,7 @@ internal sealed class ProvisioningProgressService(IOptions<GitHubOptions> github
                     ? ProvisioningTasks.AzureResources
                     : ProvisioningTasks.Queued,
             ProvisioningJobType.ConfigureGitHubDeployment => ResolveGitHubFailedTask(completedTasks),
-            _ => applicableTasks.Last().Id
+            _ => null
         };
     }
 

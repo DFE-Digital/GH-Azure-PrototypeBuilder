@@ -1,20 +1,19 @@
 @page
 @model PrototypeManager.Web.Pages.Prototypes.NewModel
 @{
-    ViewData["Title"] = "Host prototype";
+    ViewData["Title"] = "Host an existing prototype";
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_AddPrototypeSideNav")
 }
 
 <div class="dfe-c-fe-shell">
     <header class="dfe-c-fe-page-header">
         <div class="dfe-c-fe-page-header__intro">
-            <p class="dfe-c-fe-eyebrow">Prototype hosting</p>
-            <h1 class="dfe-c-fe-title">Host prototype</h1>
+            <h1 class="dfe-c-fe-title">Host an existing prototype</h1>
             <p class="dfe-c-fe-text">
-                Connect an existing GitHub repository to Azure hosting.
-                @if (!string.IsNullOrWhiteSpace(User.GetEmail()))
-                {
-                    <span class="dfe-c-fe-meta">Signed in as @User.GetEmail()</span>
-                }
+                Connect an existing GitHub repository to Azure hosting. For example, migrating a prototype from Heroku.
             </p>
         </div>
     </header>
@@ -52,22 +51,50 @@
 
         <form method="post" class="processing-trigger">
             <div class="govuk-form-group">
-                <label class="govuk-label" asp-for="Input.GitHubRepositoryUrl"></label>
-                <span class="govuk-hint">
-                    Must be a repository in the dfe-digital enterprise space.
+                <label class="govuk-label" for="github-repository-search">GitHub repository</label>
+                <span class="govuk-hint" id="github-repository-hint">
+                    Search for a repository in the allowed organisations, or paste a full GitHub URL.
                 </span>
                 <span class="govuk-error-message" asp-validation-for="Input.GitHubRepositoryUrl"></span>
-                <input class="govuk-input"
-                       asp-for="Input.GitHubRepositoryUrl"
-                       autocomplete="off"
-                       spellcheck="false" />
+                <div class="app-repo-autocomplete"
+                     data-search-url="@Url.Page("/Prototypes/New", "SearchRepositories")"
+                     data-assess-url="@Url.Page("/Prototypes/New", "AssessRepository")"
+                     data-app-name-max-length="@SlugGenerator.AppNameMaxLength">
+                    <input class="govuk-input"
+                           id="github-repository-search"
+                           type="text"
+                           role="combobox"
+                           aria-expanded="false"
+                           aria-controls="github-repository-results"
+                           aria-autocomplete="list"
+                           aria-describedby="github-repository-hint"
+                           autocomplete="off"
+                           spellcheck="false"
+                           value="@Model.Input.GitHubRepositoryUrl" />
+                    <input type="hidden"
+                           asp-for="Input.GitHubRepositoryUrl"
+                           id="Input_GitHubRepositoryUrl" />
+                    <ul class="app-repo-autocomplete__results"
+                        id="github-repository-results"
+                        role="listbox"
+                        hidden></ul>
+                    <p class="govuk-body-s app-repo-autocomplete__status" id="github-repository-status" aria-live="polite"></p>
+                    <div class="app-repo-autocomplete__assessment"
+                         id="github-repository-assessment"
+                         aria-live="polite"
+                         hidden></div>
+                </div>
             </div>
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="Input.AppName"></label>
-                <span class="govuk-hint">Lowercase, use hyphens and do not include spaces. For example, ey-training or teacher-vacancies. You don't need to include "prototype" in the app name.</span>
+                <span class="govuk-hint">Filled from the repository name when you select one. You can change it. Lowercase, use hyphens and do not include spaces.</span>
                 <span class="govuk-error-message" asp-validation-for="Input.AppName"></span>
-                <input class="govuk-input govuk-input--width-20" asp-for="Input.AppName" maxlength="20" autocomplete="off" />
+                <input class="govuk-input govuk-input--width-20"
+                       asp-for="Input.AppName"
+                       id="Input_AppName"
+                       maxlength="25"
+                       autocomplete="off" />
             </div>
 
             <govuk-password-input for="Input.PrototypePassword"
@@ -105,7 +132,361 @@
                 <span class="govuk-error-message" asp-validation-for="Input.DeclarationAgreed"></span>
             </div>
 
-            <govuk-button>Host prototype</govuk-button>
+            <govuk-button>Host an existing prototype</govuk-button>
         </form>
     </div>
 </div>
+
+@section Scripts {
+<script>
+(() => {
+  const root = document.querySelector('.app-repo-autocomplete');
+  if (!root) {
+    return;
+  }
+
+  const searchUrl = root.getAttribute('data-search-url');
+  const assessUrl = root.getAttribute('data-assess-url');
+  const maxLength = Number(root.getAttribute('data-app-name-max-length') || 25);
+  const searchInput = document.getElementById('github-repository-search');
+  const hiddenInput = document.getElementById('Input_GitHubRepositoryUrl');
+  const appNameInput = document.getElementById('Input_AppName');
+  const resultsList = document.getElementById('github-repository-results');
+  const status = document.getElementById('github-repository-status');
+  const assessment = document.getElementById('github-repository-assessment');
+
+  if (!searchUrl || !searchInput || !hiddenInput || !appNameInput || !resultsList) {
+    return;
+  }
+
+  let debounceTimer = null;
+  let activeIndex = -1;
+  let results = [];
+  let appNameTouched = appNameInput.value.trim().length > 0;
+
+  appNameInput.addEventListener('input', () => {
+    appNameTouched = true;
+  });
+
+  const normaliseAppName = (value) => {
+    let text = String(value || '').trim().toLowerCase();
+    // Drop the DfE convention prefix (prototype-{area}-) then any remaining "prototype" segments.
+    text = text.replace(/^prototype-[a-z0-9]+-/, '');
+    text = text
+      .split(/[-_\s.]+/)
+      .filter((part) => part && part !== 'prototype')
+      .join('-');
+    let result = '';
+    let previousHyphen = false;
+
+    for (const character of text) {
+      let next = '';
+      if (/\s|[_.]/.test(character)) {
+        next = '-';
+      } else if (/[a-z0-9-]/.test(character)) {
+        next = character;
+      } else {
+        continue;
+      }
+
+      if (next === '-') {
+        if (result.length === 0 || previousHyphen) {
+          continue;
+        }
+        previousHyphen = true;
+        result += '-';
+        continue;
+      }
+
+      if (result.length === 0 && /[0-9]/.test(next)) {
+        continue;
+      }
+
+      previousHyphen = false;
+      result += next;
+    }
+
+    return result.replace(/-+$/g, '').slice(0, maxLength);
+  };
+
+  const parseGitHubUrl = (value) => {
+    const trimmed = String(value || '').trim();
+    const match = trimmed.match(/^https?:\/\/(?:www\.)?github\.com\/([^/\s]+)\/([^/\s#?]+)(?:\.git)?\/?$/i);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      name: match[2].replace(/\.git$/i, ''),
+      fullName: match[1] + '/' + match[2].replace(/\.git$/i, ''),
+      htmlUrl: 'https://github.com/' + match[1] + '/' + match[2].replace(/\.git$/i, '')
+    };
+  };
+
+  const setStatus = (message) => {
+    if (status) {
+      status.textContent = message || '';
+    }
+  };
+
+  const supportLabel = (support) => {
+    if (support === 'Supported') {
+      return 'Supported';
+    }
+    if (support === 'Unsupported') {
+      return 'Not supported';
+    }
+    return 'Unknown';
+  };
+
+  const clearAssessment = () => {
+    if (!assessment) {
+      return;
+    }
+    assessment.hidden = true;
+    assessment.className = 'app-repo-autocomplete__assessment';
+    assessment.innerHTML = '';
+  };
+
+  const showAssessment = (payload) => {
+    if (!assessment) {
+      return;
+    }
+
+    const support = payload.support || 'Unknown';
+    assessment.hidden = false;
+    assessment.className = 'app-repo-autocomplete__assessment';
+    if (support === 'Supported') {
+      assessment.classList.add('app-repo-autocomplete__assessment--supported');
+    } else if (support === 'Unsupported') {
+      assessment.classList.add('app-repo-autocomplete__assessment--unsupported');
+    } else {
+      assessment.classList.add('app-repo-autocomplete__assessment--unknown');
+    }
+
+    const badge = document.createElement('span');
+    badge.className = 'app-repo-autocomplete__badge app-repo-autocomplete__badge--' + support.toLowerCase();
+    badge.textContent = supportLabel(support);
+
+    const summary = document.createElement('p');
+    summary.className = 'app-repo-autocomplete__assessment-text';
+    summary.textContent = payload.summary || '';
+
+    assessment.innerHTML = '';
+    assessment.appendChild(badge);
+    assessment.appendChild(summary);
+
+    if (payload.govUkFrontendVersion || payload.latestGovUkFrontendVersion) {
+      const frontend = document.createElement('p');
+      frontend.className = 'app-repo-autocomplete__assessment-meta';
+      if (payload.govUkFrontendVersion && payload.latestGovUkFrontendVersion && payload.isGovUkFrontendBehind) {
+        frontend.textContent = 'GOV.UK Frontend ' + payload.govUkFrontendVersion + ' (latest ' + payload.latestGovUkFrontendVersion + ')';
+      } else if (payload.govUkFrontendVersion && payload.latestGovUkFrontendVersion) {
+        frontend.textContent = 'GOV.UK Frontend ' + payload.govUkFrontendVersion + ' (up to date with latest ' + payload.latestGovUkFrontendVersion + ')';
+      } else if (payload.govUkFrontendVersion) {
+        frontend.textContent = 'GOV.UK Frontend ' + payload.govUkFrontendVersion;
+      } else {
+        frontend.textContent = 'Latest GOV.UK Frontend ' + payload.latestGovUkFrontendVersion;
+      }
+      assessment.appendChild(frontend);
+    }
+  };
+
+  const assessRepository = async (url, existingPayload) => {
+    if (existingPayload && existingPayload.support) {
+      showAssessment(existingPayload);
+      return;
+    }
+
+    if (!assessUrl || !url) {
+      clearAssessment();
+      return;
+    }
+
+    showAssessment({
+      support: 'Unknown',
+      summary: 'Checking whether this is a GOV.UK Prototype Kit app…'
+    });
+    try {
+      const response = await fetch(assessUrl + (assessUrl.includes('?') ? '&' : '?') + 'url=' + encodeURIComponent(url), {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Assess failed');
+      }
+      const payload = await response.json();
+      showAssessment(payload);
+    } catch {
+      showAssessment({
+        support: 'Unknown',
+        summary: 'We could not check whether this repository is a GOV.UK Prototype Kit app.'
+      });
+    }
+  };
+
+  const closeResults = () => {
+    resultsList.hidden = true;
+    resultsList.innerHTML = '';
+    searchInput.setAttribute('aria-expanded', 'false');
+    activeIndex = -1;
+  };
+
+  const applySelection = (item, { overwriteAppName = true } = {}) => {
+    hiddenInput.value = item.htmlUrl;
+    searchInput.value = item.fullName;
+    if (overwriteAppName || !appNameTouched) {
+      appNameInput.value = normaliseAppName(item.name);
+      appNameTouched = false;
+    }
+    closeResults();
+    setStatus('Selected ' + item.fullName);
+    assessRepository(item.htmlUrl, item);
+  };
+
+  const renderResults = (items) => {
+    results = items;
+    resultsList.innerHTML = '';
+    activeIndex = -1;
+
+    if (!items.length) {
+      closeResults();
+      setStatus('No repositories found');
+      return;
+    }
+
+    items.forEach((item, index) => {
+      const option = document.createElement('li');
+      option.className = 'app-repo-autocomplete__option';
+      option.id = 'github-repository-option-' + index;
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', 'false');
+
+      const name = document.createElement('span');
+      name.className = 'app-repo-autocomplete__option-name';
+      name.textContent = item.fullName;
+
+      const badge = document.createElement('span');
+      const support = item.support || 'Unknown';
+      badge.className = 'app-repo-autocomplete__badge app-repo-autocomplete__badge--' + support.toLowerCase();
+      badge.textContent = supportLabel(support);
+
+      option.appendChild(name);
+      option.appendChild(badge);
+      option.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        applySelection(item);
+      });
+      resultsList.appendChild(option);
+    });
+
+    resultsList.hidden = false;
+    searchInput.setAttribute('aria-expanded', 'true');
+    setStatus(items.length + ' repositories found');
+  };
+
+  const setActiveOption = (index) => {
+    const options = [...resultsList.querySelectorAll('[role="option"]')];
+    options.forEach((option, optionIndex) => {
+      const selected = optionIndex === index;
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
+      option.classList.toggle('app-repo-autocomplete__option--active', selected);
+    });
+    activeIndex = index;
+    if (index >= 0 && options[index]) {
+      searchInput.setAttribute('aria-activedescendant', options[index].id);
+    } else {
+      searchInput.removeAttribute('aria-activedescendant');
+    }
+  };
+
+  const runSearch = async (query) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      closeResults();
+      setStatus('');
+      return;
+    }
+
+    const direct = parseGitHubUrl(trimmed);
+    if (direct) {
+      applySelection(direct, { overwriteAppName: !appNameTouched });
+      return;
+    }
+
+    setStatus('Searching…');
+    try {
+      const response = await fetch(searchUrl + (searchUrl.includes('?') ? '&' : '?') + 'q=' + encodeURIComponent(trimmed), {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      const payload = await response.json();
+      renderResults(Array.isArray(payload) ? payload : []);
+    } catch {
+      closeResults();
+      setStatus('Could not search repositories. Paste a full GitHub URL instead.');
+    }
+  };
+
+  searchInput.addEventListener('input', () => {
+    hiddenInput.value = '';
+    clearAssessment();
+    const value = searchInput.value;
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => runSearch(value), 250);
+  });
+
+  searchInput.addEventListener('keydown', (event) => {
+    if (resultsList.hidden || !results.length) {
+      if (event.key === 'Enter') {
+        const direct = parseGitHubUrl(searchInput.value);
+        if (direct) {
+          event.preventDefault();
+          applySelection(direct, { overwriteAppName: !appNameTouched });
+        }
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveOption(Math.min(activeIndex + 1, results.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveOption(Math.max(activeIndex - 1, 0));
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault();
+      applySelection(results[activeIndex]);
+    } else if (event.key === 'Escape') {
+      closeResults();
+    }
+  });
+
+  searchInput.addEventListener('blur', () => {
+    window.setTimeout(() => {
+      const direct = parseGitHubUrl(searchInput.value);
+      if (direct) {
+        applySelection(direct, { overwriteAppName: !appNameTouched });
+        return;
+      }
+
+      if (!hiddenInput.value && searchInput.value.includes('/')) {
+        // Keep typed owner/name visible; user may still paste a full URL.
+        const parts = searchInput.value.trim().split('/');
+        if (parts.length === 2 && parts[0] && parts[1]) {
+          applySelection({
+            name: parts[1],
+            fullName: parts[0] + '/' + parts[1],
+            htmlUrl: 'https://github.com/' + parts[0] + '/' + parts[1]
+          }, { overwriteAppName: !appNameTouched });
+          return;
+        }
+      }
+
+      closeResults();
+    }, 150);
+  });
+})();
+</script>
+}

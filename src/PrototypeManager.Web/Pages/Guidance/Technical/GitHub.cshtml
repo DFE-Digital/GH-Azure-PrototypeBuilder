@@ -1,0 +1,72 @@
+@page
+@model GitHubModel
+@using PrototypeManager.Web.Pages.Guidance
+@{
+    ViewData["Title"] = "GitHub integration";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.TechnicalGitHub;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Technical documentation</p>
+            <h1 class="dfe-c-fe-title">GitHub integration</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Prototype Manager authenticates as a GitHub App installation to create repositories, search existing ones, push starter files, assign collaborators, and configure Actions.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Authentication</h2>
+    <p class="govuk-body">
+        Preferred auth is a GitHub App (<code>AppId</code>, <code>InstallationId</code>, private key).
+        Configure these only in gitignored local appsettings or user secrets — never in the committed example files.
+        The app mints short-lived installation tokens. After creating a new repository, the token is refreshed so the new repo is included in the installation’s scope.
+        A personal access token can be configured as a legacy fallback.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Permissions the App needs</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Administration</strong> — create repositories, assign collaborators, delete when required</li>
+        <li><strong>Contents</strong> — commit Prototype Kit files and workflow YAML; read <code>package.json</code> for host assessment</li>
+        <li><strong>Workflows</strong> — write under <code>.github/workflows/</code></li>
+        <li><strong>Actions</strong> — list and dispatch workflow runs</li>
+        <li><strong>Secrets</strong> — write repository secrets such as the Azure publish profile</li>
+        <li><strong>Metadata</strong> — read-only</li>
+    </ul>
+    <p class="govuk-body">
+        After changing App permissions, an organisation owner must accept the update on the installation before new tokens include them.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Repository search and codebase assessment</h2>
+    <p class="govuk-body">
+        On <strong>Host an existing prototype</strong>, Prototype Manager searches repositories the installation can access and assesses each hit:
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>reads root <code>package.json</code> for <code>govuk-prototype-kit</code> (supported vs not supported)</li>
+        <li>if present, reads <code>govuk-frontend</code> and compares it to the latest release from <code>alphagov/govuk-frontend</code> (cached)</li>
+        <li>results show a support badge; the selection panel shows kit and frontend detail</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Scaffold</h2>
+    <ol class="govuk-list govuk-list--number">
+        <li>Create a private organisation repository (name pattern <code>prototype-xxxx-appname</code>), or continue if it already exists.</li>
+        <li>Assign configured default collaborators (for example with <code>admin</code> permission).</li>
+        <li>Commit GOV.UK Prototype Kit starter files via the Git Data API.</li>
+    </ol>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Deployment configuration</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>upsert repository secret <code>AZURE_WEBAPP_PUBLISH_PROFILE</code></li>
+        <li>commit <code>.github/workflows/deploy-prototype.yml</code></li>
+        <li>optionally trigger <code>workflow_dispatch</code> and verify the live site content</li>
+    </ul>
+    <p class="govuk-body">
+        Prototype Manager does not auto-delete GitHub repositories on prototype delete.
+        Scaffolded repos stay in GitHub for manual or Admin cleanup tracking.
+    </p>
+</div>

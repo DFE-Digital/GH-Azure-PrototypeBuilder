@@ -16,6 +16,7 @@ namespace PrototypeManager.Infrastructure;
 internal sealed class MockPrototypeProvisioner(
     IOptions<ProvisioningOptions> provisioningOptions,
     IOptions<CostControlOptions> costControlOptions,
+    IFreeAppServicePlanPool freePlanPool,
     IAuditService auditService,
     ILogger<MockPrototypeProvisioner> logger) : IPrototypeProvisioner
 {
@@ -31,7 +32,7 @@ internal sealed class MockPrototypeProvisioner(
             prototype.Slug,
             "Mock mode: generating resource names only (no Azure resources will be created).");
 
-        ApplyResourceNames(prototype);
+        await ApplyResourceNamesAsync(prototype, cancellationToken);
 
         await ProvisioningActivityRecorder.RecordStepAsync(
             auditService,
@@ -62,19 +63,22 @@ internal sealed class MockPrototypeProvisioner(
 
     public Task DeletePrototypeAsync(Prototype prototype, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-    private void ApplyResourceNames(Prototype prototype)
+    private async Task ApplyResourceNamesAsync(Prototype prototype, CancellationToken cancellationToken)
     {
         prototype.Region = string.IsNullOrWhiteSpace(prototype.Region) ? _provisioningOptions.Location : prototype.Region;
         prototype.Sku = string.IsNullOrWhiteSpace(prototype.Sku) ? _costControlOptions.AllowedSkus.First() : prototype.Sku;
         prototype.AzureResourceGroupName = string.IsNullOrWhiteSpace(prototype.AzureResourceGroupName)
             ? PrototypeResourceNaming.CreateResourceGroupName(prototype.Slug)
             : prototype.AzureResourceGroupName;
-        prototype.AzureAppServicePlanName = string.IsNullOrWhiteSpace(prototype.AzureAppServicePlanName)
-            ? PrototypeResourceNaming.CreateAppServicePlanName(prototype.Slug)
-            : prototype.AzureAppServicePlanName;
         prototype.AzureWebAppName = string.IsNullOrWhiteSpace(prototype.AzureWebAppName)
             ? PrototypeResourceNaming.CreateWebAppName(prototype.Slug)
             : prototype.AzureWebAppName;
+
+        if (string.IsNullOrWhiteSpace(prototype.AzureAppServicePlanName))
+        {
+            var assignment = await freePlanPool.AllocateAsync(cancellationToken);
+            prototype.AzureAppServicePlanName = assignment.PlanName;
+        }
     }
 }
 
@@ -83,8 +87,10 @@ internal sealed class AzureBicepPrototypeProvisioner(
     IOptions<CostControlOptions> costControlOptions,
     IHostEnvironment environment,
     ICostControlPolicy costControlPolicy,
+    IFreeAppServicePlanPool freePlanPool,
     IAuditService auditService,
     IPrototypeAzureDeletionPolicy deletionPolicy,
+    AzureWebAppSettingsSyncService azureWebAppSettingsSyncService,
     ILogger<AzureBicepPrototypeProvisioner> logger) : IPrototypeProvisioner
 {
     private readonly ProvisioningOptions _provisioningOptions = provisioningOptions.Value;
@@ -93,7 +99,7 @@ internal sealed class AzureBicepPrototypeProvisioner(
 
     public async Task<ProvisioningResult> CreatePrototypeAsync(Prototype prototype, string prototypePassword, CancellationToken cancellationToken = default)
     {
-        EnsureNames(prototype);
+        var planAssignment = await EnsureNamesAndPlanAsync(prototype, cancellationToken);
         await costControlPolicy.ValidatePrototypeAsync(prototype);
 
         await ProvisioningActivityRecorder.RecordStepAsync(
@@ -105,7 +111,7 @@ internal sealed class AzureBicepPrototypeProvisioner(
 
         var subscription = GetSubscription();
         var resourceGroup = await CreateOrUpdateResourceGroupAsync(subscription, prototype, cancellationToken);
-        await DeployTemplateAsync(resourceGroup, prototype, prototypePassword, cancellationToken);
+        await DeployTemplateAsync(resourceGroup, prototype, planAssignment.PlanResourceId, prototypePassword, cancellationToken);
 
         await ProvisioningActivityRecorder.RecordStepAsync(
             auditService,
@@ -125,9 +131,19 @@ internal sealed class AzureBicepPrototypeProvisioner(
 
     public async Task<ProvisioningResult> UpdatePasswordAsync(Prototype prototype, string prototypePassword, CancellationToken cancellationToken = default)
     {
-        var subscription = GetSubscription();
-        var resourceGroup = await GetResourceGroupAsync(subscription, prototype.AzureResourceGroupName, cancellationToken);
-        await DeployTemplateAsync(resourceGroup, prototype, prototypePassword, cancellationToken);
+        // Patch PASSWORD only — do not redeploy the ARM template, which would wipe custom app settings.
+        await azureWebAppSettingsSyncService.SetApplicationSettingAsync(
+            prototype,
+            PrototypeAppSettingCatalog.PasswordKey,
+            prototypePassword,
+            cancellationToken);
+
+        await ProvisioningActivityRecorder.RecordStepAsync(
+            auditService,
+            logger,
+            prototype.Id,
+            prototype.Slug,
+            "Updated PASSWORD application setting on the Azure web app.");
 
         return new ProvisioningResult
         {
@@ -158,6 +174,8 @@ internal sealed class AzureBicepPrototypeProvisioner(
 
         if (resourceGroupValue is not null)
         {
+            // Deletes the prototype web app (and any dedicated escalation plan in this RG).
+            // Shared Free pool plans live in a separate RG and are left in place for reuse.
             await resourceGroupValue.DeleteAsync(WaitUntil.Completed);
         }
     }
@@ -200,18 +218,10 @@ internal sealed class AzureBicepPrototypeProvisioner(
         return operation.Value;
     }
 
-    private async Task<ResourceGroupResource> GetResourceGroupAsync(
-        SubscriptionResource subscription,
-        string resourceGroupName,
-        CancellationToken cancellationToken)
-    {
-        var resourceGroup = await subscription.GetResourceGroups().GetAsync(resourceGroupName, cancellationToken);
-        return resourceGroup.Value;
-    }
-
     private async Task DeployTemplateAsync(
         ResourceGroupResource resourceGroup,
         Prototype prototype,
+        string appServicePlanId,
         string prototypePassword,
         CancellationToken cancellationToken)
     {
@@ -226,7 +236,7 @@ internal sealed class AzureBicepPrototypeProvisioner(
         var parameters = new
         {
             location = new { value = _provisioningOptions.Location },
-            appServicePlanName = new { value = prototype.AzureAppServicePlanName },
+            appServicePlanId = new { value = appServicePlanId },
             webAppName = new { value = prototype.AzureWebAppName },
             nodeRuntime = new { value = _costControlOptions.AllowedRuntime },
             prototypePassword = new { value = prototypePassword },
@@ -262,21 +272,70 @@ internal sealed class AzureBicepPrototypeProvisioner(
             $"ARM deployment {deploymentName} completed.");
     }
 
-    private void EnsureNames(Prototype prototype)
+    private async Task<AppServicePlanAssignment> EnsureNamesAndPlanAsync(
+        Prototype prototype,
+        CancellationToken cancellationToken)
     {
         prototype.Region = string.IsNullOrWhiteSpace(prototype.Region) ? _provisioningOptions.Location : prototype.Region;
         prototype.Sku = string.IsNullOrWhiteSpace(prototype.Sku) ? _costControlOptions.AllowedSkus.First() : prototype.Sku;
         prototype.AzureResourceGroupName = string.IsNullOrWhiteSpace(prototype.AzureResourceGroupName)
             ? PrototypeResourceNaming.CreateResourceGroupName(prototype.Slug)
             : prototype.AzureResourceGroupName;
-        prototype.AzureAppServicePlanName = string.IsNullOrWhiteSpace(prototype.AzureAppServicePlanName)
-            ? PrototypeResourceNaming.CreateAppServicePlanName(prototype.Slug)
-            : prototype.AzureAppServicePlanName;
         prototype.AzureWebAppName = string.IsNullOrWhiteSpace(prototype.AzureWebAppName)
             ? PrototypeResourceNaming.CreateWebAppName(prototype.Slug)
             : prototype.AzureWebAppName;
         prototype.PrototypeUrl = string.IsNullOrWhiteSpace(prototype.PrototypeUrl)
             ? $"https://{prototype.AzureWebAppName}.azurewebsites.net"
             : prototype.PrototypeUrl;
+
+        if (!string.IsNullOrWhiteSpace(prototype.AzureAppServicePlanName))
+        {
+            return new AppServicePlanAssignment
+            {
+                PlanName = prototype.AzureAppServicePlanName,
+                PlanResourceGroupName = ResolvePlanResourceGroupName(prototype),
+                PlanResourceId = BuildPlanResourceId(prototype)
+            };
+        }
+
+        var assignment = await freePlanPool.AllocateAsync(cancellationToken);
+        prototype.AzureAppServicePlanName = assignment.PlanName;
+
+        await ProvisioningActivityRecorder.RecordStepAsync(
+            auditService,
+            logger,
+            prototype.Id,
+            prototype.Slug,
+            $"Assigned shared Free App Service plan {assignment.PlanName}.");
+
+        return assignment;
+    }
+
+    private string ResolvePlanResourceGroupName(Prototype prototype)
+    {
+        if (PrototypeResourceNaming.IsFreePoolPlanName(prototype.AzureAppServicePlanName))
+        {
+            return string.IsNullOrWhiteSpace(_provisioningOptions.AppServicePlanPoolResourceGroupName)
+                ? PrototypeResourceNaming.FreePlanPoolResourceGroupName
+                : _provisioningOptions.AppServicePlanPoolResourceGroupName.Trim();
+        }
+
+        return prototype.AzureResourceGroupName;
+    }
+
+    private string BuildPlanResourceId(Prototype prototype)
+    {
+        var subscriptionId = string.IsNullOrWhiteSpace(prototype.AzureSubscriptionId) ||
+                             string.Equals(prototype.AzureSubscriptionId, "local-development", StringComparison.OrdinalIgnoreCase)
+            ? _provisioningOptions.AzureSubscriptionId
+            : prototype.AzureSubscriptionId;
+
+        if (string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            throw new InvalidOperationException("Provisioning:AzureSubscriptionId must be configured in Azure mode.");
+        }
+
+        var planRg = ResolvePlanResourceGroupName(prototype);
+        return $"/subscriptions/{subscriptionId}/resourceGroups/{planRg}/providers/Microsoft.Web/serverfarms/{prototype.AzureAppServicePlanName}";
     }
 }

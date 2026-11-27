@@ -1,0 +1,20 @@
+@using PrototypeManager.Web
+@{
+    var path = Context.Request.Path.Value ?? "/";
+}
+
+<nav class="app-side-nav__panel" aria-label="Admin sections">
+    <p class="app-side-nav__heading">Admin</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in AppNavigation.AdminItems)
+    {
+        var href = AppNavigation.Href(Url, item);
+        var active = AppNavigation.IsActive(path, item);
+        <li class="app-side-nav__item @(item.IsChild ? "app-side-nav__item--child" : null) @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+</nav>

@@ -1,0 +1,62 @@
+@page
+@model SetupAndDeployModel
+@{
+    ViewData["Title"] = "Setup and deploy";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.SetupAndDeploy;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">User guide</p>
+            <h1 class="dfe-c-fe-title">Setup and deploy</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                After you create or host, Prototype Manager provisions GitHub and Azure in the background, then wires up deployment.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Setup progress</h2>
+    <p class="govuk-body">
+        The setup page lists each step as Completed, In progress, or Failed. Steps run as background jobs — you don’t need to keep the browser open, but staying on the page shows live updates.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>for a new prototype this usually includes creating the GitHub repo, adding the Prototype Kit, and creating Azure hosting</li>
+        <li>failed steps can be retried without starting over</li>
+        <li>when hosting is ready you may get an email with the URL, password, and next steps (if Notify is configured)</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Deploy</h2>
+    <p class="govuk-body">
+        On the prototype’s <strong>Deploy</strong> tab you can see the GitHub repository and Azure resources, and configure automated deployment.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>Prototype Manager can commit a GitHub Actions workflow and store the Azure publish profile as a repository secret</li>
+        <li>it can trigger the first deployment for you</li>
+        <li>after that, pushes to <code>main</code> deploy updates automatically</li>
+        <li>if configuration fails, check the job status and error message on Deploy or Activity</li>
+    </ul>
+    <p class="govuk-body">
+        Deployment is often queued automatically once hosting succeeds. Use Deploy to retry or re-run configuration if something went wrong.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">If a step fails</h2>
+    <ol class="govuk-list govuk-list--number">
+        <li>Read the error on the setup or Deploy page — many failures are permission or naming issues.</li>
+        <li>Retry the failed step from the same screen.</li>
+        <li>If it keeps failing, email DesignOps with the prototype name and error text.</li>
+    </ol>
+
+    <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">
+            For how jobs and the GitHub App work under the hood, see
+            <a class="govuk-link" href="@Url.Page("/Guidance/Technical/GitHub")">GitHub integration</a>
+            and
+            <a class="govuk-link" href="@Url.Page("/Guidance/Technical/Operations")">Jobs and access</a>.
+        </p>
+    </div>
+</div>

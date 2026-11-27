@@ -16,6 +16,7 @@ public class PrototypeManagerDbContext(DbContextOptions<PrototypeManagerDbContex
     public DbSet<PrototypeAppSetting> PrototypeAppSettings => Set<PrototypeAppSetting>();
     public DbSet<ProvisioningJobSecret> ProvisioningJobSecrets => Set<ProvisioningJobSecret>();
     public DbSet<GitHubOrganisation> GitHubOrganisations => Set<GitHubOrganisation>();
+    public DbSet<TrackedGitHubRepository> TrackedGitHubRepositories => Set<TrackedGitHubRepository>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,6 +64,9 @@ public class PrototypeManagerDbContext(DbContextOptions<PrototypeManagerDbContex
             builder.Property(x => x.OwnerEmail).HasMaxLength(320);
             builder.Property(x => x.DeputyOwnerEmail).HasMaxLength(320);
             builder.Property(x => x.GitHubRepositoryUrl).HasMaxLength(500);
+            builder.Property(x => x.CompassWorkItemTitle).HasMaxLength(300);
+            builder.Property(x => x.CompassProductId).HasMaxLength(64);
+            builder.Property(x => x.CompassProductName).HasMaxLength(300);
             builder.Property(x => x.AzureSubscriptionId).HasMaxLength(64);
             builder.Property(x => x.AzureResourceGroupName).HasMaxLength(120);
             builder.Property(x => x.AzureAppServicePlanName).HasMaxLength(120);
@@ -72,7 +76,10 @@ public class PrototypeManagerDbContext(DbContextOptions<PrototypeManagerDbContex
             builder.Property(x => x.Reason).HasMaxLength(2000);
             builder.Property(x => x.Region).HasMaxLength(50);
             builder.Property(x => x.Sku).HasMaxLength(20);
+            builder.Property(x => x.BaselineSku).HasMaxLength(20);
+            builder.Property(x => x.TemporarySkuUntil);
             builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+            builder.HasIndex(x => x.TemporarySkuUntil);
             builder.HasIndex(x => x.Status);
             builder.HasIndex(x => x.ExpiresAt);
             builder.HasOne(x => x.BusinessArea)
@@ -161,6 +168,20 @@ public class PrototypeManagerDbContext(DbContextOptions<PrototypeManagerDbContex
             builder.Property(x => x.Name).HasMaxLength(39);
             builder.Property(x => x.CreatedBy).HasMaxLength(320);
             builder.HasIndex(x => x.Name).IsUnique();
+        });
+
+        modelBuilder.Entity<TrackedGitHubRepository>(builder =>
+        {
+            builder.HasKey(x => x.Id);
+            builder.Property(x => x.RepositoryUrl).HasMaxLength(500);
+            builder.Property(x => x.Owner).HasMaxLength(100);
+            builder.Property(x => x.RepositoryName).HasMaxLength(200);
+            builder.Property(x => x.PrototypeName).HasMaxLength(200);
+            builder.Property(x => x.CreatedBy).HasMaxLength(320);
+            builder.Property(x => x.ClearedBy).HasMaxLength(320);
+            builder.HasIndex(x => x.RepositoryUrl);
+            builder.HasIndex(x => x.PrototypeId);
+            builder.HasIndex(x => x.ClearedAt);
         });
     }
 }

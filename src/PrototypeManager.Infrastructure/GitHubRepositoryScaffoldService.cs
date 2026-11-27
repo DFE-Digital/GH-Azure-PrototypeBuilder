@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PrototypeManager.Application;
@@ -38,31 +36,43 @@ internal sealed class GitHubRepositoryScaffoldService(
     GitHubApiClient gitHubApiClient,
     GitHubTokenIdentityService gitHubTokenIdentityService,
     IAuditService auditService,
-    IOptions<GitHubOptions> githubOptions,
+    IOptionsMonitor<GitHubOptions> githubOptions,
     ILogger<GitHubRepositoryScaffoldService> logger) : IGitHubRepositoryScaffoldService
 {
-    private readonly GitHubOptions _githubOptions = githubOptions.Value;
+    private GitHubOptions Options => githubOptions.CurrentValue;
 
     public async Task ScaffoldAsync(Prototype prototype, CancellationToken cancellationToken = default)
     {
-        var token = gitHubApiClient.RequireToken();
+        var options = Options;
         var (owner, repository) = GitHubRepositoryValidator.ParseRepositoryUrl(prototype.GitHubRepositoryUrl);
+        var repositoryExists = await RepositoryExistsAsync(owner, repository, cancellationToken);
 
-        logger.LogInformation(
-            "Creating GitHub repository {Owner}/{Repository} for prototype {PrototypeId}.",
-            owner,
-            repository,
-            prototype.Id);
+        if (repositoryExists)
+        {
+            logger.LogInformation(
+                "GitHub repository {Owner}/{Repository} already exists for prototype {PrototypeId}; skipping create and continuing scaffold.",
+                owner,
+                repository,
+                prototype.Id);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Creating GitHub repository {Owner}/{Repository} for prototype {PrototypeId}.",
+                owner,
+                repository,
+                prototype.Id);
 
-        await GitHubRepositoryCreator.CreateAsync(
-            gitHubApiClient,
-            gitHubTokenIdentityService,
-            _githubOptions,
-            logger,
-            owner,
-            repository,
-            cancellationToken,
-            allowExisting: true);
+            await GitHubRepositoryCreator.CreateAsync(
+                gitHubApiClient,
+                gitHubTokenIdentityService,
+                options,
+                logger,
+                owner,
+                repository,
+                cancellationToken,
+                allowExisting: true);
+        }
 
         await ProvisioningTaskRecorder.RecordCompletedAsync(
             auditService,
@@ -71,12 +81,26 @@ internal sealed class GitHubRepositoryScaffoldService(
             prototype.Slug,
             ProvisioningTasks.GitHubCreateRepository);
 
+        // Installation tokens minted before a repo is created may not cover that repo yet.
+        if (options.HasGitHubAppCredentials)
+        {
+            await gitHubApiClient.GetAccessTokenAsync(forceRefresh: true, cancellationToken);
+        }
+
+        await GitHubRepositoryCollaboratorAssigner.AssignConfiguredAsync(
+            gitHubApiClient,
+            options,
+            logger,
+            owner,
+            repository,
+            cancellationToken);
+
         logger.LogInformation(
             "Scaffolding GOV.UK Prototype Kit in {Owner}/{Repository}.",
             owner,
             repository);
 
-        await ScaffoldPrototypeKitAsync(owner, repository, token, cancellationToken);
+        await ScaffoldPrototypeKitAsync(owner, repository, cancellationToken);
 
         await ProvisioningTaskRecorder.RecordCompletedAsync(
             auditService,
@@ -86,123 +110,46 @@ internal sealed class GitHubRepositoryScaffoldService(
             ProvisioningTasks.GitHubScaffoldKit);
     }
 
+    private async Task<bool> RepositoryExistsAsync(
+        string owner,
+        string repository,
+        CancellationToken cancellationToken)
+    {
+        var baseUrl = Options.ApiBaseUrl.TrimEnd('/');
+        using var response = await gitHubApiClient.SendAsync(
+            HttpMethod.Get,
+            $"{baseUrl}/repos/{owner}/{repository}",
+            cancellationToken: cancellationToken);
+
+        return response.IsSuccessStatusCode;
+    }
+
     private async Task ScaffoldPrototypeKitAsync(
         string owner,
         string repository,
-        string token,
         CancellationToken cancellationToken)
     {
-        var workingDirectory = Path.Combine(Path.GetTempPath(), $"pm-kit-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(workingDirectory);
-
-        try
-        {
-            await WritePrototypeKitStarterFilesAsync(workingDirectory, cancellationToken);
-            await PushInitialCommitAsync(
-                GitHubRepositoryCreator.ResolveGitHost(_githubOptions),
-                owner,
-                repository,
-                token,
-                workingDirectory,
-                cancellationToken);
-        }
-        finally
-        {
-            try
-            {
-                Directory.Delete(workingDirectory, recursive: true);
-            }
-            catch (IOException exception)
-            {
-                logger.LogWarning(exception, "Unable to delete temporary scaffold directory {Directory}.", workingDirectory);
-            }
-        }
-    }
-
-    private Task WritePrototypeKitStarterFilesAsync(string workingDirectory, CancellationToken cancellationToken) =>
-        PrototypeKitTarballScaffold.WriteStarterFilesAsync(
-            workingDirectory,
-            _githubOptions.PrototypeKitVersion,
+        var options = Options;
+        var files = await PrototypeKitTarballScaffold.LoadStarterFilesAsync(
+            options.PrototypeKitVersion,
             logger,
             cancellationToken);
 
-    private static async Task PushInitialCommitAsync(
-        string gitHost,
-        string owner,
-        string repository,
-        string token,
-        string workingDirectory,
-        CancellationToken cancellationToken)
-    {
-        var remoteUrl = $"https://x-access-token:{token}@{gitHost}/{owner}/{repository}.git";
+        var branch = string.IsNullOrWhiteSpace(options.WorkflowBranch)
+            ? "main"
+            : options.WorkflowBranch.Trim();
 
-        await RunGitAsync(["init", "-b", "main"], workingDirectory, cancellationToken);
-        await RunGitAsync(["config", "user.email", "prototype-manager@education.gov.uk"], workingDirectory, cancellationToken);
-        await RunGitAsync(["config", "user.name", "Prototype Manager"], workingDirectory, cancellationToken);
-        await RunGitAsync(["add", "."], workingDirectory, cancellationToken);
-        await RunGitAsync(["commit", "-m", "Initial commit from GOV.UK Prototype Kit"], workingDirectory, cancellationToken);
-        await RunGitAsync(["remote", "add", "origin", remoteUrl], workingDirectory, cancellationToken);
-        await RunGitAsync(["push", "-u", "origin", "main"], workingDirectory, cancellationToken);
+        await GitHubGitDataCommitPublisher.PublishAsync(
+            gitHubApiClient,
+            options,
+            logger,
+            owner,
+            repository,
+            files,
+            "Initial commit from GOV.UK Prototype Kit",
+            branch,
+            cancellationToken);
     }
-
-    private static async Task RunGitAsync(string[] arguments, string workingDirectory, CancellationToken cancellationToken)
-    {
-        var exitCode = await RunProcessAsync("git", string.Join(' ', arguments.Select(QuoteProcessArgument)), workingDirectory, cancellationToken);
-
-        if (exitCode != 0)
-        {
-            throw new InvalidOperationException("Unable to push GOV.UK Prototype Kit code to GitHub.");
-        }
-    }
-
-    private static async Task<int> RunProcessAsync(
-        string fileName,
-        string arguments,
-        string workingDirectory,
-        CancellationToken cancellationToken)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            }
-        };
-
-        if (!process.Start())
-        {
-            throw new InvalidOperationException($"Unable to start {fileName}.");
-        }
-
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error))
-        {
-            throw new InvalidOperationException(error.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(output))
-        {
-            Debug.WriteLine(output);
-        }
-
-        return process.ExitCode;
-    }
-
-    private static string QuoteProcessArgument(string value) =>
-        value.Contains(' ') || value.Contains('"')
-            ? $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\""
-            : value;
 }
 
 internal sealed class GitHubRepositoryScaffoldServiceSelector(
@@ -211,9 +158,9 @@ internal sealed class GitHubRepositoryScaffoldServiceSelector(
     IOptions<GitHubOptions> githubOptions) : IGitHubRepositoryScaffoldService
 {
     private IGitHubRepositoryScaffoldService Implementation =>
-        string.IsNullOrWhiteSpace(githubOptions.Value.PersonalAccessToken)
-            ? mockService
-            : liveService;
+        githubOptions.Value.IsConfigured
+            ? liveService
+            : mockService;
 
     public Task ScaffoldAsync(Prototype prototype, CancellationToken cancellationToken = default) =>
         Implementation.ScaffoldAsync(prototype, cancellationToken);

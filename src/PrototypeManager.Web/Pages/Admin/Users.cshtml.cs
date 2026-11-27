@@ -38,11 +38,10 @@ public sealed class UsersModel(
             {
                 Email = Input.Email,
                 DisplayName = Input.DisplayName,
-                IsAdmin = Input.IsAdmin,
                 BusinessAreaIds = Input.BusinessAreaIds
             }, User.GetEmail());
 
-            StatusMessage = "User access updated.";
+            StatusMessage = "Business area access updated.";
             return RedirectToPage();
         }
         catch (ValidationException exception)
@@ -67,9 +66,6 @@ public sealed class UsersModel(
 
         [Display(Name = "Display name")]
         public string DisplayName { get; set; } = string.Empty;
-
-        [Display(Name = "Make this user an admin")]
-        public bool IsAdmin { get; set; }
 
         public List<Guid> BusinessAreaIds { get; set; } = [];
     }

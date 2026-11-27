@@ -7,15 +7,16 @@
         <header class="dfe-f-modal__header">
             <h2 class="govuk-heading-m dfe-f-modal__title" id="delete-prototype-modal-title">Delete prototype</h2>
             <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
             </button>
         </header>
         <div class="dfe-f-modal__body" id="delete-prototype-modal-description">
             <p class="govuk-body">
                 This will queue removal of the Azure hosting environment for
-                <strong id="delete-prototype-modal-name"></strong>.
+                <strong id="delete-prototype-modal-name"></strong>
+                and remove the prototype from Prototype Manager.
                 <span id="delete-prototype-modal-github-note" hidden>
-                    The GitHub repository created for this prototype will also be deleted.
+                    The GitHub repository will not be deleted automatically — clean it up manually in GitHub afterwards (listed under Admin → GitHub cleanup).
                 </span>
                 This action cannot be undone.
             </p>

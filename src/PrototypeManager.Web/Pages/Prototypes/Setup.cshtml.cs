@@ -20,7 +20,7 @@ public sealed class SetupModel(
     public ProvisioningProgressSnapshot Progress { get; private set; } = new();
     public IReadOnlyList<ProvisioningJob> Jobs { get; private set; } = [];
     public IReadOnlyList<PrototypeContact> Contacts { get; private set; } = [];
-    public SetupRetryEvaluator.RetryOptions Retry { get; private set; } = new(false, false, false, null);
+    public SetupRetryEvaluator.RetryOptions Retry { get; private set; } = new(false, false, false, null, null);
 
     public bool CanManage =>
         Prototype is not null &&
@@ -38,6 +38,13 @@ public sealed class SetupModel(
             User.GetEmail(),
             User.IsAdmin(),
             User.IsSupport());
+
+    public bool HasLiveHosting =>
+        Prototype is not null &&
+        (Prototype.Status == PrototypeStatus.Live ||
+         (!string.IsNullOrWhiteSpace(Prototype.PrototypeUrl) &&
+          Prototype.PrototypeUrl.Contains("azurewebsites.net", StringComparison.OrdinalIgnoreCase)) ||
+         !string.IsNullOrWhiteSpace(Prototype.AzureWebAppName));
 
     public bool ShowStatusMessage =>
         !string.IsNullOrWhiteSpace(StatusMessage) &&
@@ -67,7 +74,7 @@ public sealed class SetupModel(
             Progress,
             Jobs,
             CanManage,
-            !string.IsNullOrWhiteSpace(_githubOptions.PersonalAccessToken));
+            _githubOptions.IsConfigured);
 
         return Page();
     }
@@ -96,7 +103,7 @@ public sealed class SetupModel(
             progress,
             jobs,
             canManage,
-            !string.IsNullOrWhiteSpace(_githubOptions.PersonalAccessToken));
+            _githubOptions.IsConfigured);
 
         return new JsonResult(new
         {
@@ -113,6 +120,8 @@ public sealed class SetupModel(
             canRetryScaffold = retry.CanRetryScaffold,
             canRetryGitHubDeployment = retry.CanRetryGitHubDeployment,
             retryBlockedReason = retry.BlockedReason,
+            failedTaskId = retry.FailedTaskId,
+            retryButtonLabel = SetupRetryEvaluator.GetRetryButtonLabel(retry.FailedTaskId),
             tasks = progress.Tasks.Select(task => new
             {
                 id = task.Id,
@@ -174,5 +183,44 @@ public sealed class SetupModel(
         "Failed" => "Failed",
         "Skipped" => "Skipped",
         _ => "Not started"
+    };
+
+    public string? CurrentStageId =>
+        Progress.Tasks.FirstOrDefault(task =>
+                string.Equals(task.Status, "InProgress", StringComparison.Ordinal) ||
+                string.Equals(task.Status, "Failed", StringComparison.Ordinal))
+            ?.Id
+        ?? Progress.Tasks.FirstOrDefault(task =>
+                string.Equals(task.Status, "Pending", StringComparison.Ordinal))
+            ?.Id;
+
+    public string CurrentStageTitle =>
+        Progress.IsComplete
+            ? "Setup complete"
+            : Progress.Tasks.FirstOrDefault(task => string.Equals(task.Id, CurrentStageId, StringComparison.Ordinal))?.Label
+              ?? "Getting ready";
+
+    public string CurrentStageExplanation =>
+        Progress.IsComplete
+            ? "Hosting is ready. You can open the live prototype or manage settings from the details page."
+            : ExplainStage(CurrentStageId);
+
+    public static string ExplainStage(string? taskId) => taskId switch
+    {
+        ProvisioningTasks.Queued =>
+            "Your request is in the queue. Prototype Manager is about to start creating the GitHub repository and Azure resources.",
+        ProvisioningTasks.GitHubCreateRepository =>
+            "A new GitHub repository is being created in the allowed organisation for this prototype.",
+        ProvisioningTasks.GitHubScaffoldKit =>
+            "The GOV.UK Prototype Kit starter files are being added to the repository so you have a working app to deploy.",
+        ProvisioningTasks.AzureResources =>
+            "Azure is creating a resource group, App Service plan, and web app to host the prototype with password protection.",
+        ProvisioningTasks.GitHubConfigure =>
+            "A GitHub Actions workflow and publish profile are being added so pushes can deploy to Azure automatically.",
+        ProvisioningTasks.GitHubDeploy =>
+            "GitHub Actions is building and publishing the prototype kit to the Azure web app.",
+        ProvisioningTasks.SiteVerify =>
+            "Prototype Manager is checking that the live site responds. This can take a few minutes after the first deploy.",
+        _ => "Prototype Manager is preparing the next setup step."
     };
 }

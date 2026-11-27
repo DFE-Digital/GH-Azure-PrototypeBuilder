@@ -41,7 +41,8 @@ internal static class GitHubRepositoryDeleter
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new InvalidOperationException(
                 $"Unable to delete GitHub repository {owner}/{repository}. " +
-                "The configured personal access token needs Administration permission for this repository.");
+                "The GitHub App or token needs Administration permission to delete repositories. " +
+                $"GitHub response: {responseBody}");
         }
 
         await gitHubApiClient.EnsureSuccessAsync(response, "delete GitHub repository", cancellationToken);

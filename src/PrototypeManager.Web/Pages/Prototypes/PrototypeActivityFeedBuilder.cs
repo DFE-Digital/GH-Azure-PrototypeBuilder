@@ -2,10 +2,41 @@ using PrototypeManager.Domain;
 
 namespace PrototypeManager.Web.Pages.Prototypes;
 
+public static class PrototypeActivityTypes
+{
+    public const string All = "all";
+    public const string Hosting = "hosting";
+    public const string Deployment = "deployment";
+    public const string Configuration = "configuration";
+    public const string Access = "access";
+    public const string Management = "management";
+
+    public static readonly IReadOnlyList<(string Key, string Label)> Options =
+    [
+        (All, "All"),
+        (Hosting, "Hosting"),
+        (Deployment, "Deployment"),
+        (Configuration, "Configuration"),
+        (Access, "Access"),
+        (Management, "Management")
+    ];
+
+    public static bool IsValid(string? value) =>
+        string.IsNullOrWhiteSpace(value) ||
+        Options.Any(option => string.Equals(option.Key, value, StringComparison.OrdinalIgnoreCase));
+
+    public static string Normalize(string? value) =>
+        Options.FirstOrDefault(option =>
+                string.Equals(option.Key, value, StringComparison.OrdinalIgnoreCase))
+            .Key
+        ?? All;
+}
+
 public sealed class PrototypeActivityItem
 {
     public required string Id { get; init; }
     public required string Action { get; init; }
+    public required string ActivityType { get; init; }
     public required string Status { get; init; }
     public int? Attempt { get; init; }
     public required DateTimeOffset OccurredAt { get; init; }
@@ -30,6 +61,7 @@ internal static class PrototypeActivityFeedBuilder
             {
                 Id = $"job-{job.Id}",
                 Action = DetailsModel.GetJobTypeLabel(job.Type),
+                ActivityType = ClassifyJob(job.Type),
                 Status = job.Status.ToString(),
                 Attempt = job.AttemptCount,
                 OccurredAt = job.CompletedAt ?? job.StartedAt ?? job.CreatedAt,
@@ -52,6 +84,7 @@ internal static class PrototypeActivityFeedBuilder
             {
                 Id = $"audit-{audit.Id}",
                 Action = audit.Action,
+                ActivityType = ClassifyAudit(audit.Action),
                 Status = "Recorded",
                 Attempt = null,
                 OccurredAt = audit.CreatedAt,
@@ -66,6 +99,46 @@ internal static class PrototypeActivityFeedBuilder
             .OrderByDescending(item => item.OccurredAt)
             .ToList();
     }
+
+    private static string ClassifyJob(ProvisioningJobType type) => type switch
+    {
+        ProvisioningJobType.Create
+            or ProvisioningJobType.Retry
+            or ProvisioningJobType.Delete
+            or ProvisioningJobType.ScaffoldGitHubRepository => PrototypeActivityTypes.Hosting,
+        ProvisioningJobType.ConfigureGitHubDeployment => PrototypeActivityTypes.Deployment,
+        ProvisioningJobType.UpdatePassword
+            or ProvisioningJobType.UpdateAppSettings => PrototypeActivityTypes.Configuration,
+        _ => PrototypeActivityTypes.Management
+    };
+
+    private static string ClassifyAudit(string action)
+    {
+        if (ContainsAny(action, "manager", "owner", "deputy", "contact"))
+        {
+            return PrototypeActivityTypes.Access;
+        }
+
+        if (ContainsAny(action, "password", "config var", "app setting", "settings"))
+        {
+            return PrototypeActivityTypes.Configuration;
+        }
+
+        if (ContainsAny(action, "github", "deployment", "deploy"))
+        {
+            return PrototypeActivityTypes.Deployment;
+        }
+
+        if (ContainsAny(action, "provision", "hosting", "scaffold", "delete", "retry", "prototype requested"))
+        {
+            return PrototypeActivityTypes.Hosting;
+        }
+
+        return PrototypeActivityTypes.Management;
+    }
+
+    private static bool ContainsAny(string value, params string[] needles) =>
+        needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsJobAuditDuplicate(AuditEvent audit, IReadOnlyList<ProvisioningJob> jobs)
     {
@@ -159,7 +232,7 @@ internal static class PrototypeActivityFeedBuilder
     }
 }
 
-internal static class PrototypeContactPresentation
+public static class PrototypeContactPresentation
 {
     public static string GetDisplayName(string email)
     {

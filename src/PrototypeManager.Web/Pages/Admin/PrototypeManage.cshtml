@@ -1,0 +1,183 @@
+@page "{id:guid}"
+@model PrototypeManager.Web.Pages.Admin.PrototypeManageModel
+@{
+    ViewData["Title"] = Model.Prototype is null ? "Manage prototype" : $"Manage {Model.Prototype.Name}";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.PrototypesSection;
+    var prototype = Model.Prototype!;
+    var openException = Model.ExceptionRequests.FirstOrDefault(request => request.Status == ExceptionRequestStatus.Requested);
+}
+
+<p class="govuk-body">
+    <a class="govuk-link" asp-page="/Admin/Prototypes">Back to manage prototypes</a>
+</p>
+
+<h1 class="govuk-heading-l">@prototype.Name</h1>
+<p class="govuk-body">
+    Admin controls for this prototype.
+    <a class="govuk-link" asp-page="/Prototypes/Details" asp-route-id="@prototype.Id">Open full prototype page</a>
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+        </div>
+    </div>
+}
+
+<h2 class="govuk-heading-m">Summary</h2>
+<dl class="govuk-summary-list">
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Status</dt>
+        <dd class="govuk-summary-list__value">@prototype.Status</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Owner</dt>
+        <dd class="govuk-summary-list__value">
+            @prototype.OwnerEmail
+            <br />
+            <a class="govuk-link" asp-page="/Admin/RemoveAccess" asp-route-email="@prototype.OwnerEmail">
+                Remove this person’s access across prototypes
+            </a>
+        </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Deputy owner</dt>
+        <dd class="govuk-summary-list__value">
+            @(string.IsNullOrWhiteSpace(prototype.DeputyOwnerEmail) ? "—" : prototype.DeputyOwnerEmail)
+        </dd>
+        <dd class="govuk-summary-list__actions">
+            @if (!string.IsNullOrWhiteSpace(prototype.DeputyOwnerEmail))
+            {
+                <form method="post" asp-page-handler="ClearDeputy" asp-route-id="@prototype.Id">
+                    <button type="submit" class="govuk-link govuk-body govuk-!-margin-0">Remove</button>
+                </form>
+            }
+        </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Current plan</dt>
+        <dd class="govuk-summary-list__value">
+            @(string.IsNullOrWhiteSpace(prototype.Sku) ? "—" : prototype.Sku)
+            @if (prototype.TemporarySkuUntil is not null)
+            {
+                <text> (temporary until @prototype.TemporarySkuUntil.Value.ToString("dd MMM yyyy"))</text>
+            }
+        </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">App URL</dt>
+        <dd class="govuk-summary-list__value">
+            @if (!string.IsNullOrWhiteSpace(prototype.PrototypeUrl))
+            {
+                <a class="govuk-link" href="@prototype.PrototypeUrl" target="_blank" rel="noopener noreferrer">@prototype.PrototypeUrl</a>
+            }
+            else
+            {
+                <text>—</text>
+            }
+        </dd>
+    </div>
+    @if (openException is not null)
+    {
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Open exception</dt>
+            <dd class="govuk-summary-list__value">
+                @openException.RequestedSku requested by @openException.RequestedBy
+                <br />
+                <span class="govuk-hint govuk-!-margin-bottom-0">@openException.Reason</span>
+            </dd>
+        </div>
+    }
+</dl>
+
+<h2 class="govuk-heading-m govuk-!-margin-top-8">Temporary Azure plan</h2>
+<p class="govuk-body">
+    Escalate to B1 or B2 for a limited time. When the date passes, Prototype Manager reverts the App Service plan to Free automatically.
+</p>
+
+<form method="post" asp-page-handler="SetPlan" asp-route-id="@prototype.Id" class="prototype-action-form">
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="PlanInput.Sku"></label>
+        <select class="govuk-select" asp-for="PlanInput.Sku">
+            @foreach (var plan in PrototypeHostingPlans.HigherPlans)
+            {
+                <option value="@plan.Sku">@plan.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="PlanInput.Days"></label>
+        <div class="govuk-hint">Use this or an until date, not both. Days wins if both are left blank for until date.</div>
+        <input class="govuk-input govuk-input--width-5" asp-for="PlanInput.Days" inputmode="numeric" />
+    </div>
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="PlanInput.UntilDate"></label>
+        <input class="govuk-input govuk-input--width-10" asp-for="PlanInput.UntilDate" type="date" />
+    </div>
+
+    <govuk-button>Set temporary plan</govuk-button>
+</form>
+
+@if (prototype.TemporarySkuUntil is not null ||
+     !string.Equals(prototype.Sku, PrototypeHostingPlans.FreeSku, StringComparison.OrdinalIgnoreCase))
+{
+    <form method="post" asp-page-handler="RevertPlan" asp-route-id="@prototype.Id" class="govuk-!-margin-top-2">
+        <button type="submit" class="govuk-button govuk-button--secondary">Revert to Free now</button>
+    </form>
+}
+
+<h2 class="govuk-heading-m govuk-!-margin-top-8">Prototype managers</h2>
+@if (!Model.Contacts.Any())
+{
+    <p class="govuk-body">No additional managers are listed on this prototype.</p>
+}
+else
+{
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Email</th>
+                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+        @foreach (var contact in Model.Contacts)
+        {
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@contact.Email</td>
+                <td class="govuk-table__cell">
+                    <form method="post" asp-page-handler="RemoveContact" asp-route-id="@prototype.Id" asp-route-contactId="@contact.Id" class="govuk-!-margin-0">
+                        <button type="submit" class="govuk-link govuk-body govuk-!-margin-0">Remove</button>
+                    </form>
+                    <a class="govuk-link" asp-page="/Admin/RemoveAccess" asp-route-email="@contact.Email">Revoke all access</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+<h2 class="govuk-heading-m govuk-!-margin-top-8">Delete prototype</h2>
+<p class="govuk-body">
+    Removes the Prototype Manager entry and queues Azure cleanup. GitHub repositories are not deleted automatically.
+</p>
+<form method="post" asp-page-handler="Delete" asp-route-id="@prototype.Id" class="prototype-action-form">
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="ConfirmDeleteName">Type @prototype.Name to confirm</label>
+        <input class="govuk-input" asp-for="ConfirmDeleteName" autocomplete="off" />
+    </div>
+    <button type="submit" class="govuk-button govuk-button--warning">Delete prototype</button>
+</form>

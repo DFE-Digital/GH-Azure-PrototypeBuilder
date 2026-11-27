@@ -1,86 +1,63 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using PrototypeManager.Application;
 using PrototypeManager.Domain;
 
 namespace PrototypeManager.Infrastructure;
 
-internal sealed class MockGitHubRepositoryDeletionService(
-    ILogger<MockGitHubRepositoryDeletionService> logger) : IGitHubRepositoryDeletionService
-{
-    public Task<string?> DeleteScaffoldedRepositoryAsync(Prototype prototype, CancellationToken cancellationToken = default)
-    {
-        if (!prototype.RequiresRepositoryScaffold)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        logger.LogInformation(
-            "Mock GitHub repository deletion skipped for prototype {PrototypeId}.",
-            prototype.Id);
-
-        return Task.FromResult<string?>("GitHub repository deletion skipped in mock mode.");
-    }
-}
-
+/// <summary>
+/// GitHub repository deletion is intentionally disabled. Scaffolded repositories are
+/// tracked for manual cleanup in Admin after the Prototype Manager entry is removed.
+/// </summary>
 internal sealed class GitHubRepositoryDeletionService(
-    GitHubApiClient gitHubApiClient,
-    PrototypeManagerDbContext dbContext,
-    IOptions<GitHubOptions> githubOptions,
     ILogger<GitHubRepositoryDeletionService> logger) : IGitHubRepositoryDeletionService
 {
-    private readonly GitHubOptions _githubOptions = githubOptions.Value;
-
-    public async Task<string?> DeleteScaffoldedRepositoryAsync(
+    public Task<string?> DeleteScaffoldedRepositoryAsync(
         Prototype prototype,
         CancellationToken cancellationToken = default)
     {
         if (!prototype.RequiresRepositoryScaffold ||
             string.IsNullOrWhiteSpace(prototype.GitHubRepositoryUrl))
         {
-            return null;
+            return Task.FromResult<string?>(null);
         }
 
-        var scaffoldSucceeded = await dbContext.ProvisioningJobs.AnyAsync(
-            job => job.PrototypeId == prototype.Id &&
-                   job.Type == ProvisioningJobType.ScaffoldGitHubRepository &&
-                   job.Status == ProvisioningJobStatus.Succeeded,
-            cancellationToken);
+        logger.LogInformation(
+            "Skipping GitHub repository deletion for {RepositoryUrl}. Manual cleanup is required.",
+            prototype.GitHubRepositoryUrl);
 
-        if (!scaffoldSucceeded)
+        return Task.FromResult<string?>(
+            "GitHub repository was left in place for manual cleanup.");
+    }
+}
+
+// Kept for DI compatibility with older registrations/tests.
+internal sealed class MockGitHubRepositoryDeletionService(
+    ILogger<MockGitHubRepositoryDeletionService> logger) : IGitHubRepositoryDeletionService
+{
+    public Task<string?> DeleteScaffoldedRepositoryAsync(
+        Prototype prototype,
+        CancellationToken cancellationToken = default)
+    {
+        if (!prototype.RequiresRepositoryScaffold ||
+            string.IsNullOrWhiteSpace(prototype.GitHubRepositoryUrl))
         {
-            logger.LogInformation(
-                "Skipping GitHub repository deletion for prototype {PrototypeId} because repository setup did not complete successfully.",
-                prototype.Id);
-            return null;
+            return Task.FromResult<string?>(null);
         }
 
-        gitHubApiClient.RequireToken();
-        var (owner, repository) = GitHubRepositoryValidator.ParseRepositoryUrl(prototype.GitHubRepositoryUrl);
+        logger.LogInformation(
+            "Skipping GitHub repository deletion for prototype {PrototypeId} (manual cleanup required).",
+            prototype.Id);
 
-        await GitHubRepositoryDeleter.DeleteAsync(
-            gitHubApiClient,
-            _githubOptions,
-            logger,
-            owner,
-            repository,
-            cancellationToken);
-
-        return $"Deleted GitHub repository {owner}/{repository}.";
+        return Task.FromResult<string?>(
+            "GitHub repository was left in place for manual cleanup.");
     }
 }
 
 internal sealed class GitHubRepositoryDeletionServiceSelector(
-    MockGitHubRepositoryDeletionService mockService,
-    GitHubRepositoryDeletionService liveService,
-    IOptions<GitHubOptions> githubOptions) : IGitHubRepositoryDeletionService
+    GitHubRepositoryDeletionService liveService) : IGitHubRepositoryDeletionService
 {
-    private IGitHubRepositoryDeletionService Implementation =>
-        string.IsNullOrWhiteSpace(githubOptions.Value.PersonalAccessToken)
-            ? mockService
-            : liveService;
-
-    public Task<string?> DeleteScaffoldedRepositoryAsync(Prototype prototype, CancellationToken cancellationToken = default) =>
-        Implementation.DeleteScaffoldedRepositoryAsync(prototype, cancellationToken);
+    public Task<string?> DeleteScaffoldedRepositoryAsync(
+        Prototype prototype,
+        CancellationToken cancellationToken = default) =>
+        liveService.DeleteScaffoldedRepositoryAsync(prototype, cancellationToken);
 }

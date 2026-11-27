@@ -6,10 +6,14 @@
         <section class="dfe-c-fe-panel dfe-c-fe-metric">
             <h2 class="dfe-c-fe-metric__label">Hosting status</h2>
             <p class="dfe-c-fe-metric__value">
-                <span class="@ListModel.GetStatusBadgeClass(Model.Prototype!.Status)">
-                    @ListModel.GetStatusLabel(Model.Prototype.Status)
+                <span class="@Model.HostingHealth.BadgeClass">
+                    @Model.HostingHealth.Label
                 </span>
             </p>
+            @if (!string.IsNullOrWhiteSpace(Model.HostingHealth.Detail))
+            {
+                <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">@Model.HostingHealth.Detail</p>
+            }
         </section>
 
         @if (Model.Prototype.Status == PrototypeStatus.Live && !string.IsNullOrWhiteSpace(Model.Prototype.AzureWebAppName))
@@ -47,24 +51,27 @@
         }
 
         <section class="dfe-c-fe-panel dfe-c-fe-metric">
-            <h2 class="dfe-c-fe-metric__label">Expires</h2>
-            <p class="dfe-c-fe-metric__value">@Model.Prototype.ExpiresAt.ToString("dd MMM yyyy")</p>
-            @if (Model.CanManage)
+            <h2 class="dfe-c-fe-metric__label">Stack</h2>
+            <p class="dfe-c-fe-metric__value">@DetailsModel.FormatStackSummary(Model.Prototype)</p>
+            @if (Model.OpenHigherPlanRequest is { } openRequest)
+            {
+                <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                    <span class="dfe-c-fe-badge dfe-c-fe-badge--info">
+                        Higher plan @openRequest.RequestedSku requested
+                    </span>
+                </p>
+            }
+            else if (Model.CanRequestHigherPlan)
             {
                 <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
                     <a class="govuk-link"
                        href="#"
                        role="button"
-                       aria-controls="change-expiry-modal">
-                        Change<span class="govuk-visually-hidden"> expiry</span>
+                       aria-controls="request-higher-plan-modal">
+                        Request higher plan
                     </a>
                 </p>
             }
-        </section>
-
-        <section class="dfe-c-fe-panel dfe-c-fe-metric">
-            <h2 class="dfe-c-fe-metric__label">Stack</h2>
-            <p class="dfe-c-fe-metric__value">@DetailsModel.FormatStackSummary(Model.Prototype)</p>
         </section>
     </div>
 
@@ -140,6 +147,68 @@
                 }
             </div>
             <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">COMPASS work item</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (Model.Prototype.CompassWorkItemId is int workItemId)
+                    {
+                        <a class="govuk-link"
+                           href="https://compass.education.gov.uk"
+                           target="_blank"
+                           rel="noopener noreferrer">
+                            @(string.IsNullOrWhiteSpace(Model.Prototype.CompassWorkItemTitle)
+                                ? $"Work item {workItemId}"
+                                : Model.Prototype.CompassWorkItemTitle)
+                        </a>
+                    }
+                    else
+                    {
+                        <span>Not linked</span>
+                    }
+                </dd>
+                @if (Model.CanAssignCompass)
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="change-compass-work-item-modal">
+                            @(Model.Prototype.CompassWorkItemId is null ? "Assign" : "Change")<span class="govuk-visually-hidden"> COMPASS work item</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">COMPASS product</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (!string.IsNullOrWhiteSpace(Model.Prototype.CompassProductId))
+                    {
+                        <a class="govuk-link"
+                           href="https://compass.education.gov.uk"
+                           target="_blank"
+                           rel="noopener noreferrer">
+                            @(string.IsNullOrWhiteSpace(Model.Prototype.CompassProductName)
+                                ? Model.Prototype.CompassProductId
+                                : Model.Prototype.CompassProductName)
+                        </a>
+                    }
+                    else
+                    {
+                        <span>Not linked</span>
+                    }
+                </dd>
+                @if (Model.CanAssignCompass)
+                {
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           href="#"
+                           role="button"
+                           aria-controls="change-compass-product-modal">
+                            @(string.IsNullOrWhiteSpace(Model.Prototype.CompassProductId) ? "Assign" : "Change")<span class="govuk-visually-hidden"> COMPASS product</span>
+                        </a>
+                    </dd>
+                }
+            </div>
+            <div class="govuk-summary-list__row">
                 <dt class="govuk-summary-list__key">Owner</dt>
                 <dd class="govuk-summary-list__value">@Model.Prototype.OwnerEmail</dd>
                 @if (Model.CanManageContacts)
@@ -151,47 +220,70 @@
                     </dd>
                 }
             </div>
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Expiry date</dt>
-                <dd class="govuk-summary-list__value">@Model.Prototype.ExpiresAt.ToString("dd MMM yyyy")</dd>
-                @if (Model.CanManage)
-                {
-                    <dd class="govuk-summary-list__actions">
-                        <a class="govuk-link"
-                           href="#"
-                           role="button"
-                           aria-controls="change-expiry-modal">
-                            Change<span class="govuk-visually-hidden"> expiry date</span>
-                        </a>
-                    </dd>
-                }
-            </div>
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Prototype password</dt>
-                <dd class="govuk-summary-list__value">
-                    <code id="prototype-password-value" class="dfe-c-fe-password-field__value">
-                        @if (Model.CanViewPassword)
-                        {
-                            @(string.IsNullOrWhiteSpace(Model.RevealedPassword) ? "Not set" : Model.RevealedPassword)
-                        }
-                        else
-                        {
-                            @:Restricted
-                        }
-                    </code>
-                </dd>
-                @if (Model.CanManage)
-                {
-                    <dd class="govuk-summary-list__actions">
-                        <a class="govuk-link"
-                           href="#"
-                           role="button"
-                           aria-controls="change-password-modal">
-                            Change<span class="govuk-visually-hidden"> prototype password</span>
-                        </a>
-                    </dd>
-                }
-            </div>
         </dl>
+    </section>
+
+    <section class="dfe-c-fe-panel">
+        <div class="dfe-c-fe-panel__header">
+            <div>
+                <h2 class="dfe-c-fe-heading">GitHub repository</h2>
+                <p class="dfe-c-fe-text">Open the repo in GitHub or clone it locally.</p>
+            </div>
+        </div>
+
+        @if (!Model.HasGitHubRepository)
+        {
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">The GitHub repository has not been set up yet.</p>
+        }
+        else
+        {
+            <div class="dfe-c-fe-repo">
+                <div class="dfe-c-fe-repo__primary">
+                    <p class="dfe-c-fe-repo__label">Repository</p>
+                    <a class="dfe-c-fe-repo__name govuk-link"
+                       href="@Model.GitHubRepositoryNormalizedUrl"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        @Model.GitHubRepositoryDisplayName
+                    </a>
+                    <p class="dfe-c-fe-repo__url">
+                        <span class="govuk-visually-hidden">Full repository URL</span>
+                        @Model.GitHubRepositoryNormalizedUrl
+                    </p>
+                </div>
+
+                <div class="dfe-c-fe-repo__clone">
+                    <p class="dfe-c-fe-repo__label">Clone with Git</p>
+                    @if (!string.IsNullOrWhiteSpace(Model.GitHubCloneHttpsCommand))
+                    {
+                        <div class="dfe-c-fe-code-row">
+                            <div class="dfe-c-fe-code-row__meta">
+                                <span class="dfe-c-fe-code-row__protocol">HTTPS</span>
+                            </div>
+                            <code class="dfe-c-fe-code-row__command">@Model.GitHubCloneHttpsCommand</code>
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 dfe-c-fe-code-row__copy"
+                                    data-copy-text="@Model.GitHubCloneHttpsCommand">
+                                Copy
+                            </button>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.GitHubCloneSshCommand))
+                    {
+                        <div class="dfe-c-fe-code-row">
+                            <div class="dfe-c-fe-code-row__meta">
+                                <span class="dfe-c-fe-code-row__protocol">SSH</span>
+                            </div>
+                            <code class="dfe-c-fe-code-row__command">@Model.GitHubCloneSshCommand</code>
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 dfe-c-fe-code-row__copy"
+                                    data-copy-text="@Model.GitHubCloneSshCommand">
+                                Copy
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     </section>
 </div>

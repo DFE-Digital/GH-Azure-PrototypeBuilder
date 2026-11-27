@@ -6,11 +6,16 @@
         aria-labelledby="stop-app-modal-title"
         aria-describedby="stop-app-modal-description">
     <div class="dfe-f-modal__panel">
-        <form method="post" asp-page-handler="StopApp" asp-route-id="@Model.Prototype!.Id">
+        <form method="post"
+              asp-page-handler="StopApp"
+              asp-route-id="@Model.Prototype!.Id"
+              class="processing-trigger"
+              data-processing-title="Stopping app"
+              data-processing-message="Asking Azure to stop the app. This usually takes a short while.">
             <header class="dfe-f-modal__header">
                 <h2 class="govuk-heading-m dfe-f-modal__title" id="stop-app-modal-title">Stop app</h2>
                 <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-                    <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
                 </button>
             </header>
             <div class="dfe-f-modal__body" id="stop-app-modal-description">

@@ -1,0 +1,66 @@
+@page
+@model ManageModel
+@{
+    ViewData["Title"] = "Manage a prototype";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.Manage;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">User guide</p>
+            <h1 class="dfe-c-fe-title">Manage a prototype</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                After setup, use the prototype sections to share access, change settings, and see what’s happened.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Overview</h2>
+    <p class="govuk-body">
+        Overview shows status, business area, live URL, and password (if you’re allowed).
+        From here you can open the app, change the password, and start or stop the web app when it’s live.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Access</h2>
+    <p class="govuk-body">
+        Access controls who can see the password and manage the prototype.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Owner</strong> — primary contact; can manage contacts and settings</li>
+        <li><strong>Deputy owner</strong> — secondary owner</li>
+        <li><strong>Contacts</strong> — named team members who can manage and view the password</li>
+    </ul>
+    <p class="govuk-body">
+        People may also see prototypes through their assigned business areas, even if they’re not listed on Access.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Activity</h2>
+    <p class="govuk-body">
+        Activity is the audit and job history: provisioning, password changes, config updates, deployments, and other management actions.
+        Use it when something failed and you need the sequence of events.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Settings</h2>
+    <p class="govuk-body">
+        Settings covers environment configuration and lifecycle actions.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>view and edit allowed config vars (synced to the Azure web app)</li>
+        <li>system settings are shown but not freely editable</li>
+        <li>archive a prototype when it’s no longer needed</li>
+        <li>delete removes Azure hosting (GitHub repos created by Prototype Manager are left for manual or Admin cleanup)</li>
+        <li>retry failed provisioning when the action is available</li>
+    </ul>
+
+    <div class="govuk-inset-text">
+        <p class="govuk-body govuk-!-margin-bottom-0">
+            For Deploy, see <a class="govuk-link" href="@Url.Page("/Guidance/SetupAndDeploy")">Setup and deploy</a>.
+            For opening the live site and passwords, see <a class="govuk-link" href="@Url.Page("/Guidance/FindAndOpen")">Find and open</a>.
+        </p>
+    </div>
+</div>

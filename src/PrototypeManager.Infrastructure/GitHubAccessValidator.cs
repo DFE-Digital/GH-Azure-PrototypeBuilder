@@ -16,23 +16,27 @@ internal sealed class GitHubAccessValidator(
         CancellationToken cancellationToken = default)
     {
         var (owner, repository) = GitHubRepositoryValidator.ParseRepositoryUrl(repositoryUrl);
-        var baseUrl = githubOptions.CurrentValue.ApiBaseUrl.TrimEnd('/');
+        var options = githubOptions.CurrentValue;
+        var baseUrl = options.ApiBaseUrl.TrimEnd('/');
 
-        var token = gitHubApiClient.RequireToken();
+        var token = await gitHubApiClient.GetAccessTokenAsync(cancellationToken);
 
         logger.LogInformation(
-            "Validating GitHub token for {Owner}/{Repository}. Token length {TokenLength}, prefix {TokenPrefix}.",
+            "Validating GitHub credentials for {Owner}/{Repository}. Auth mode {AuthMode}, token length {TokenLength}.",
             owner,
             repository,
-            token.Length,
-            token[..Math.Min(12, token.Length)]);
+            options.HasGitHubAppCredentials ? "GitHubApp" : "PersonalAccessToken",
+            token.Length);
 
-        using var userResponse = await gitHubApiClient.SendAsync(
-            HttpMethod.Get,
-            $"{baseUrl}/user",
-            cancellationToken: cancellationToken);
+        if (!options.HasGitHubAppCredentials)
+        {
+            using var userResponse = await gitHubApiClient.SendAsync(
+                HttpMethod.Get,
+                $"{baseUrl}/user",
+                cancellationToken: cancellationToken);
 
-        await gitHubApiClient.EnsureSuccessAsync(userResponse, "GitHub token validation", cancellationToken);
+            await gitHubApiClient.EnsureSuccessAsync(userResponse, "GitHub token validation", cancellationToken);
+        }
 
         using var repositoryResponse = await gitHubApiClient.SendAsync(
             HttpMethod.Get,
@@ -44,7 +48,7 @@ internal sealed class GitHubAccessValidator(
             throw new ValidationException(
                 $"GitHub repository {owner}/{repository} was not found. " +
                 "If you are creating a new prototype, retry GitHub repository setup first. " +
-                "For fine-grained tokens, set repository access to All repositories and include Contents, Actions, Secrets, and Workflows permissions.");
+                "Confirm the GitHub App is installed on the organisation with access to this repository.");
         }
 
         await gitHubApiClient.EnsureSuccessAsync(
@@ -74,17 +78,17 @@ internal sealed class GitHubAccessValidator(
 
         var (_, workflowBranch) = await GitHubRepositoryMetadata.ResolveWorkflowBranchAsync(
             gitHubApiClient,
-            githubOptions.CurrentValue,
+            options,
             owner,
             repository,
             cancellationToken);
 
         if (!await GitHubRepositoryMetadata.BranchExistsAsync(
                 gitHubApiClient,
-                githubOptions.CurrentValue,
+                options,
                 owner,
                 repository,
-                workflowBranch ?? githubOptions.CurrentValue.WorkflowBranch,
+                workflowBranch ?? options.WorkflowBranch,
                 cancellationToken))
         {
             throw new ValidationException(

@@ -1,0 +1,45 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="change-compass-product-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="change-compass-product-modal-title"
+        aria-describedby="change-compass-product-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="UpdateCompassProduct" asp-route-id="@Model.Prototype!.Id">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="change-compass-product-modal-title">Assign COMPASS product</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="change-compass-product-modal-description">
+                <p class="govuk-body">Link this prototype to a COMPASS product, or clear the link.</p>
+                <div class="govuk-form-group">
+                    <label class="govuk-label" for="selectedCompassProductId">COMPASS product</label>
+                    <select class="govuk-select" id="selectedCompassProductId" name="SelectedCompassProductId">
+                        <option value="">Not linked</option>
+                        @foreach (var product in Model.CompassProducts)
+                        {
+                            var isSelected =
+                                string.Equals(Model.SelectedCompassProductId, product.Id, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(Model.Prototype.CompassProductId, product.Id, StringComparison.OrdinalIgnoreCase);
+                            @if (isSelected)
+                            {
+                                <option value="@product.Id" selected="selected">@product.DisplayName</option>
+                            }
+                            else
+                            {
+                                <option value="@product.Id">@product.DisplayName</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Save product</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

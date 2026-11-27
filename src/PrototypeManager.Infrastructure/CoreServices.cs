@@ -49,7 +49,6 @@ internal sealed partial class CostControlPolicy(IOptions<CostControlOptions> opt
     public Task ValidateScaffoldedCreateRequestAsync(CreateScaffoldedPrototypeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.GitHubOrganisation) ||
-            string.IsNullOrWhiteSpace(request.GitHubRepositoryName) ||
             string.IsNullOrWhiteSpace(request.PrototypePassword) ||
             request.BusinessAreaId == Guid.Empty)
         {
@@ -58,6 +57,7 @@ internal sealed partial class CostControlPolicy(IOptions<CostControlOptions> opt
 
         try
         {
+            request.AppName = SlugGenerator.NormaliseAppName(request.AppName);
             SlugGenerator.ValidateAppName(request.AppName);
         }
         catch (ArgumentException exception)
@@ -65,7 +65,8 @@ internal sealed partial class CostControlPolicy(IOptions<CostControlOptions> opt
             throw new ValidationException(exception.Message);
         }
 
-        if (!GitHubRepositoryNameRegex().IsMatch(request.GitHubRepositoryName))
+        if (!string.IsNullOrWhiteSpace(request.GitHubRepositoryName) &&
+            !GitHubRepositoryNameRegex().IsMatch(request.GitHubRepositoryName))
         {
             throw new ValidationException("Repository name must use lowercase letters, numbers and hyphens only.");
         }
@@ -540,7 +541,7 @@ internal sealed class DevelopmentDataSeeder(
             GitHubRepositoryUrl = $"https://github.com/department-for-education/{prototypeSlug}",
             AzureSubscriptionId = "local-development",
             AzureResourceGroupName = PrototypeResourceNaming.CreateResourceGroupName(prototypeSlug),
-            AzureAppServicePlanName = PrototypeResourceNaming.CreateAppServicePlanName(prototypeSlug),
+            AzureAppServicePlanName = PrototypeResourceNaming.CreateFreePoolPlanName(1),
             AzureWebAppName = webAppName,
             PrototypeUrl = $"https://{webAppName}.azurewebsites.net",
             Status = status,

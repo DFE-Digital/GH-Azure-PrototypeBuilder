@@ -14,6 +14,7 @@ public sealed class DetailsModel(
     IPrototypeWebAppRuntimeService webAppRuntimeService,
     IDeploymentWorkflowGenerator workflowGenerator,
     IProvisioningProgressService provisioningProgressService,
+    ICompassCatalogService compassCatalogService,
     IOptions<GitHubOptions> githubOptions,
     IOptions<CostControlOptions> costControlOptions) : PageModel
 {
@@ -43,11 +44,24 @@ public sealed class DetailsModel(
     public string? RevealedPassword { get; private set; }
     public WebAppRuntimeStatus WebAppRuntime { get; private set; } = new();
     public IReadOnlyList<BusinessArea> AvailableBusinessAreas { get; private set; } = [];
+    public IReadOnlyList<CompassWorkItemOption> CompassWorkItems { get; private set; } = [];
+    public IReadOnlyList<CompassProductOption> CompassProducts { get; private set; } = [];
+    public bool CompassConfigured { get; private set; }
     public IReadOnlyList<PrototypeActivityItem> ActivityItems { get; private set; } = [];
+    public IReadOnlyList<PrototypeActivityItem> PagedActivityItems { get; private set; } = [];
     public IReadOnlyList<Prototype> SwitchablePrototypes { get; private set; } = [];
+    public IReadOnlyList<ExceptionRequest> ExceptionRequests { get; private set; } = [];
+
+    public const int ActivityPageSize = 10;
 
     [BindProperty(SupportsGet = true)]
     public string? Section { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? ActivityType { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int ActivityPage { get; set; } = 1;
 
     [TempData]
     public string? StatusMessage { get; set; }
@@ -68,6 +82,12 @@ public sealed class DetailsModel(
     public Guid? BusinessAreaId { get; set; }
 
     [BindProperty]
+    public int? SelectedCompassWorkItemId { get; set; }
+
+    [BindProperty]
+    public string? SelectedCompassProductId { get; set; }
+
+    [BindProperty]
     public string? NewPassword { get; set; }
 
     [BindProperty]
@@ -75,6 +95,12 @@ public sealed class DetailsModel(
 
     [BindProperty]
     public string? ConfigVarValue { get; set; }
+
+    [BindProperty]
+    public string? RequestedSku { get; set; }
+
+    [BindProperty]
+    public string? ExceptionReason { get; set; }
 
     public IEnumerable<PrototypeAppSettingView> OrderedAppSettings =>
         AppSettings.OrderBy(setting => setting.Key, StringComparer.OrdinalIgnoreCase);
@@ -112,7 +138,7 @@ public sealed class DetailsModel(
 
     public string SectionDescription(string section) => section switch
     {
-        PrototypeSection => "Hosting status, access details, and quick actions for this prototype.",
+        PrototypeSection => string.Empty,
         GithubSecuritySection => "Repository connection and automated deployment.",
         ContactsSection => "People who can access and manage this prototype.",
         HistorySection => "Setup, deployment, password, and management actions.",
@@ -188,7 +214,7 @@ public sealed class DetailsModel(
 
     public bool GitHubAutoConfigureEnabled => _githubOptions.AutoConfigureDeployment;
 
-    public bool GitHubTokenConfigured => !string.IsNullOrWhiteSpace(_githubOptions.PersonalAccessToken);
+    public bool GitHubTokenConfigured => _githubOptions.IsConfigured;
 
     public bool IsProvisioningActive =>
         Prototype is not null &&
@@ -287,11 +313,211 @@ public sealed class DetailsModel(
 
     public static string GetStackType() => "Linux";
 
+    private static DateTimeOffset HostingStaleCutoff => DateTimeOffset.UtcNow.AddMonths(-2);
+
+    public HostingHealthStatus HostingHealth => ResolveHostingHealth();
+
+    public sealed record HostingHealthStatus(string Label, string BadgeClass, string? Detail);
+
+    private HostingHealthStatus ResolveHostingHealth()
+    {
+        if (Prototype is null)
+        {
+            return new("Unknown", "dfe-c-fe-badge dfe-c-fe-badge--muted", null);
+        }
+
+        return Prototype.Status switch
+        {
+            PrototypeStatus.Failed => new(
+                "Failed",
+                "dfe-c-fe-badge dfe-c-fe-badge--danger",
+                "Provisioning or hosting has failed."),
+            PrototypeStatus.Expired => new(
+                "Expired",
+                "dfe-c-fe-badge dfe-c-fe-badge--danger",
+                "This prototype has passed its expiry date."),
+            PrototypeStatus.Archived => new(
+                "Archived",
+                "dfe-c-fe-badge dfe-c-fe-badge--muted",
+                null),
+            PrototypeStatus.Deleted => new(
+                "Deleted",
+                "dfe-c-fe-badge dfe-c-fe-badge--muted",
+                null),
+            PrototypeStatus.Deleting => new(
+                "Deleting",
+                "dfe-c-fe-badge dfe-c-fe-badge--warning",
+                "Hosting is being removed."),
+            PrototypeStatus.Requested
+                or PrototypeStatus.Queued
+                or PrototypeStatus.Provisioning => new(
+                ListModel.GetStatusLabel(Prototype.Status),
+                "dfe-c-fe-badge dfe-c-fe-badge--info",
+                "Hosting is still being set up."),
+            PrototypeStatus.Live => ResolveLiveHostingHealth(),
+            _ => new(
+                ListModel.GetStatusLabel(Prototype.Status),
+                ListModel.GetStatusBadgeClass(Prototype.Status),
+                null)
+        };
+    }
+
+    private HostingHealthStatus ResolveLiveHostingHealth()
+    {
+        var latestOverallJob = Jobs
+            .OrderByDescending(job => job.CompletedAt ?? job.StartedAt ?? job.CreatedAt)
+            .FirstOrDefault();
+
+        if (latestOverallJob?.Status == ProvisioningJobStatus.Failed)
+        {
+            return new(
+                "Unhealthy",
+                "dfe-c-fe-badge dfe-c-fe-badge--danger",
+                "The latest hosting or deployment job failed.");
+        }
+
+        if (Jobs.Any(job => job.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running))
+        {
+            return new(
+                "Updating",
+                "dfe-c-fe-badge dfe-c-fe-badge--info",
+                "A hosting or deployment job is in progress.");
+        }
+
+        var lastDeploymentAt = Jobs
+            .Where(job =>
+                job.Status == ProvisioningJobStatus.Succeeded &&
+                IsDeploymentRelatedJob(job.Type))
+            .Select(job => job.CompletedAt ?? job.StartedAt ?? job.CreatedAt)
+            .DefaultIfEmpty(Prototype!.CreatedAt)
+            .Max();
+
+        if (lastDeploymentAt < HostingStaleCutoff)
+        {
+            return new(
+                "Stale",
+                "dfe-c-fe-badge dfe-c-fe-badge--danger",
+                "No successful deployments for over 2 months.");
+        }
+
+        if (!IsOnSupportedHostingPlan())
+        {
+            return new(
+                "Plan issue",
+                "dfe-c-fe-badge dfe-c-fe-badge--warning",
+                "This prototype is not on a supported app plan.");
+        }
+
+        return new(
+            "Healthy",
+            "dfe-c-fe-badge dfe-c-fe-badge--success",
+            "Supported plan, recent deployment, and no recent failures.");
+    }
+
+    private bool IsOnSupportedHostingPlan()
+    {
+        if (Prototype is null || string.IsNullOrWhiteSpace(Prototype.Sku))
+        {
+            return false;
+        }
+
+        if (_costControlOptions.AllowedSkus.Contains(Prototype.Sku, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return ExceptionRequests.Any(request =>
+            request.Status == ExceptionRequestStatus.Approved &&
+            string.Equals(request.RequestedSku, Prototype.Sku, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsDeploymentRelatedJob(ProvisioningJobType type) => type is
+        ProvisioningJobType.Create
+        or ProvisioningJobType.Retry
+        or ProvisioningJobType.ConfigureGitHubDeployment
+        or ProvisioningJobType.ScaffoldGitHubRepository;
+
     public bool CanManageAppRuntime =>
         CanManage &&
         Prototype is not null &&
         Prototype.Status == PrototypeStatus.Live &&
         !string.IsNullOrWhiteSpace(Prototype.AzureWebAppName);
+
+    public bool CanAssignCompass =>
+        CanManage && CompassConfigured;
+
+    public bool HasGitHubRepository =>
+        Prototype is not null &&
+        !string.IsNullOrWhiteSpace(Prototype.GitHubRepositoryUrl);
+
+    public string? GitHubRepositoryDisplayName
+    {
+        get
+        {
+            if (!HasGitHubRepository)
+            {
+                return null;
+            }
+
+            var owner = PrototypeGitHubRepositoryUrls.TryGetOwner(Prototype!.GitHubRepositoryUrl);
+            var repository = PrototypeGitHubRepositoryUrls.TryGetRepositoryName(Prototype.GitHubRepositoryUrl);
+            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repository))
+            {
+                return PrototypeGitHubRepositoryUrls.Normalize(Prototype.GitHubRepositoryUrl);
+            }
+
+            return $"{owner}/{repository}";
+        }
+    }
+
+    public string? GitHubRepositoryNormalizedUrl =>
+        HasGitHubRepository
+            ? PrototypeGitHubRepositoryUrls.Normalize(Prototype!.GitHubRepositoryUrl)
+            : null;
+
+    public string? GitHubCloneHttpsCommand =>
+        HasGitHubRepository
+            ? $"git clone {GitHubRepositoryNormalizedUrl}.git"
+            : null;
+
+    public string? GitHubCloneSshCommand
+    {
+        get
+        {
+            if (!HasGitHubRepository || string.IsNullOrWhiteSpace(GitHubRepositoryDisplayName))
+            {
+                return null;
+            }
+
+            var owner = PrototypeGitHubRepositoryUrls.TryGetOwner(Prototype!.GitHubRepositoryUrl);
+            var repository = PrototypeGitHubRepositoryUrls.TryGetRepositoryName(Prototype.GitHubRepositoryUrl);
+            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repository))
+            {
+                return null;
+            }
+
+            return $"git clone git@github.com:{owner}/{repository}.git";
+        }
+    }
+
+    public ExceptionRequest? OpenHigherPlanRequest =>
+        ExceptionRequests.FirstOrDefault(request => request.Status == ExceptionRequestStatus.Requested);
+
+    public IReadOnlyList<PrototypeHostingPlanOption> AvailableHigherPlans =>
+        PrototypeHostingPlans.HigherPlans
+            .Where(plan =>
+                Prototype is null ||
+                !string.Equals(plan.Sku, Prototype.Sku, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    public bool CanRequestHigherPlan =>
+        CanManage &&
+        Prototype is not null &&
+        Prototype.Status is not (PrototypeStatus.Archived or PrototypeStatus.Deleted or PrototypeStatus.Deleting) &&
+        OpenHigherPlanRequest is null &&
+        AvailableHigherPlans.Count > 0;
+
+    public bool ShowRequestHigherPlanModal { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
@@ -307,7 +533,17 @@ public sealed class DetailsModel(
         NewExpiryDate = DateOnly.FromDateTime(Prototype.ExpiresAt.DateTime);
 
         var progress = provisioningProgressService.Build(Prototype, Jobs, AuditEvents);
-        if (provisioningProgressService.ShouldShowProgress(Prototype, Jobs, AuditEvents) && !progress.IsComplete)
+        var hasLiveHosting = Prototype.Status == PrototypeStatus.Live
+            || (!string.IsNullOrWhiteSpace(Prototype.PrototypeUrl)
+                && Prototype.PrototypeUrl.Contains("azurewebsites.net", StringComparison.OrdinalIgnoreCase))
+            || !string.IsNullOrWhiteSpace(Prototype.AzureWebAppName);
+
+        // Keep users in Setup while creation is actively running. Once hosting exists, allow Manage
+        // even if a later setup step failed — they should not need to delete and recreate.
+        if (progress.IsActive
+            || (provisioningProgressService.ShouldShowProgress(Prototype, Jobs, AuditEvents)
+                && !progress.IsComplete
+                && !hasLiveHosting))
         {
             return RedirectToPage("/Prototypes/Setup", new { id });
         }
@@ -323,6 +559,65 @@ public sealed class DetailsModel(
 
     public string SectionUrl(string section) =>
         Url.Page("/Prototypes/Details", new { id = Prototype?.Id, section }) ?? string.Empty;
+
+    public string ActiveActivityType => PrototypeActivityTypes.Normalize(ActivityType);
+
+    public int ActivityTotalCount =>
+        ActiveActivityType == PrototypeActivityTypes.All
+            ? ActivityItems.Count
+            : ActivityItems.Count(item =>
+                string.Equals(item.ActivityType, ActiveActivityType, StringComparison.OrdinalIgnoreCase));
+
+    public int ActivityTotalPages =>
+        Math.Max(1, (int)Math.Ceiling(ActivityTotalCount / (double)ActivityPageSize));
+
+    public int CurrentActivityPage =>
+        Math.Clamp(ActivityPage <= 0 ? 1 : ActivityPage, 1, ActivityTotalPages);
+
+    public bool HasPreviousActivityPage => CurrentActivityPage > 1;
+
+    public bool HasNextActivityPage => CurrentActivityPage < ActivityTotalPages;
+
+    public int ActivityTypeCount(string type) =>
+        string.Equals(type, PrototypeActivityTypes.All, StringComparison.OrdinalIgnoreCase)
+            ? ActivityItems.Count
+            : ActivityItems.Count(item =>
+                string.Equals(item.ActivityType, type, StringComparison.OrdinalIgnoreCase));
+
+    public string ActivityUrl(string? type = null, int? page = null)
+    {
+        var normalizedType = PrototypeActivityTypes.Normalize(type ?? ActiveActivityType);
+        var pageNumber = page ?? 1;
+
+        return Url.Page(
+                   "/Prototypes/Details",
+                   new
+                   {
+                       id = Prototype?.Id,
+                       section = HistorySection,
+                       activityType = normalizedType == PrototypeActivityTypes.All ? null : normalizedType,
+                       activityPage = pageNumber <= 1 ? null : (int?)pageNumber
+                   })
+               ?? string.Empty;
+    }
+
+    private void ApplyActivityPaging()
+    {
+        ActivityType = ActiveActivityType;
+        ActivityPage = CurrentActivityPage;
+
+        var filtered = ActiveActivityType == PrototypeActivityTypes.All
+            ? ActivityItems
+            : ActivityItems
+                .Where(item =>
+                    string.Equals(item.ActivityType, ActiveActivityType, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        PagedActivityItems = filtered
+            .Skip((CurrentActivityPage - 1) * ActivityPageSize)
+            .Take(ActivityPageSize)
+            .ToList();
+    }
 
     public async Task<IActionResult> OnGetPrototypePasswordAsync(Guid id)
     {
@@ -366,14 +661,22 @@ public sealed class DetailsModel(
             User.IsAdmin(),
             User.IsSupport());
 
+        var hasPendingSync = settings.Any(setting => setting.IsPendingSync);
+        var hasFailedSync = settings.Any(setting =>
+            string.Equals(setting.SyncStatus, AppSettingSyncStatuses.Failed, StringComparison.Ordinal));
+
         return new JsonResult(new
         {
+            hasPendingSync,
+            hasFailedSync,
+            syncComplete = !hasPendingSync && !hasFailedSync,
             settings = settings.Select(setting => new
             {
                 key = setting.Key,
                 displayValue = setting.IsSecret ? null : setting.Value,
                 setting.IsSecret,
                 setting.IsPendingSync,
+                setting.SyncStatus,
                 setting.IsEditable
             })
         });
@@ -467,6 +770,82 @@ public sealed class DetailsModel(
         }
     }
 
+    public async Task<IActionResult> OnPostUpdateCompassWorkItemAsync(Guid id)
+    {
+        if (!await TryLoadPrototypeAsync(id))
+        {
+            return NotFound();
+        }
+
+        Contacts = await prototypeService.GetContactsAsync(id);
+
+        if (!CanManage)
+        {
+            return NotFound();
+        }
+
+        Section = PrototypeSection;
+
+        try
+        {
+            await prototypeService.UpdateCompassWorkItemAsync(
+                id,
+                SelectedCompassWorkItemId,
+                User.GetEmail(),
+                User.IsAdmin(),
+                User.IsSupport());
+
+            StatusMessage = SelectedCompassWorkItemId is null
+                ? "COMPASS work item cleared."
+                : "COMPASS work item updated.";
+            return RedirectToPage(new { id, section = PrototypeSection });
+        }
+        catch (ValidationException exception)
+        {
+            StatusMessage = exception.Message;
+            await LoadPageDataAsync(id);
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostUpdateCompassProductAsync(Guid id)
+    {
+        if (!await TryLoadPrototypeAsync(id))
+        {
+            return NotFound();
+        }
+
+        Contacts = await prototypeService.GetContactsAsync(id);
+
+        if (!CanManage)
+        {
+            return NotFound();
+        }
+
+        Section = PrototypeSection;
+
+        try
+        {
+            await prototypeService.UpdateCompassProductAsync(
+                id,
+                SelectedCompassProductId,
+                User.GetEmail(),
+                User.IsAdmin(),
+                User.IsSupport());
+
+            StatusMessage = string.IsNullOrWhiteSpace(SelectedCompassProductId)
+                ? "COMPASS product cleared."
+                : "COMPASS product updated.";
+            return RedirectToPage(new { id, section = PrototypeSection });
+        }
+        catch (ValidationException exception)
+        {
+            StatusMessage = exception.Message;
+            await LoadPageDataAsync(id);
+            return Page();
+        }
+    }
+
     public async Task<IActionResult> OnPostExtendExpiryAsync(Guid id)
     {
         if (!await TryLoadPrototypeAsync(id))
@@ -538,6 +917,47 @@ public sealed class DetailsModel(
         catch (ValidationException exception)
         {
             StatusMessage = exception.Message;
+            await LoadPageDataAsync(id);
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostRequestHigherPlanAsync(Guid id)
+    {
+        if (!await TryLoadPrototypeAsync(id))
+        {
+            return NotFound();
+        }
+
+        Contacts = await prototypeService.GetContactsAsync(id);
+        ExceptionRequests = await prototypeService.GetExceptionRequestsForPrototypeAsync(id);
+
+        if (!CanManage)
+        {
+            return NotFound();
+        }
+
+        Section = PrototypeSection;
+
+        try
+        {
+            await prototypeService.RequestHigherPlanAsync(
+                id,
+                RequestedSku ?? string.Empty,
+                ExceptionReason ?? string.Empty,
+                User.GetEmail(),
+                User.IsAdmin(),
+                User.IsSupport());
+
+            StatusMessage = "Higher plan request submitted for DesignOps review.";
+            RequestedSku = string.Empty;
+            ExceptionReason = string.Empty;
+            return RedirectToPage(new { id, section = PrototypeSection });
+        }
+        catch (ValidationException exception)
+        {
+            ModelState.AddModelError(ResolveHigherPlanErrorField(exception.Message), exception.Message);
+            ShowRequestHigherPlanModal = true;
             await LoadPageDataAsync(id);
             return Page();
         }
@@ -826,9 +1246,11 @@ public sealed class DetailsModel(
                 return RedirectToSettings(id);
             }
 
+            ConfigVarKey = PrototypeAppSettingCatalog.NormaliseKey(ConfigVarKey ?? string.Empty);
+
             await appSettingsService.SetSettingAsync(
                 id,
-                ConfigVarKey ?? string.Empty,
+                ConfigVarKey,
                 ConfigVarValue ?? string.Empty,
                 User.GetEmail(),
                 User.IsAdmin(),
@@ -839,7 +1261,8 @@ public sealed class DetailsModel(
         }
         catch (ValidationException exception)
         {
-            ModelState.AddModelError(string.IsNullOrWhiteSpace(ConfigVarKey) ? nameof(ConfigVarKey) : nameof(ConfigVarValue), exception.Message);
+            ConfigVarKey = PrototypeAppSettingCatalog.NormaliseKey(ConfigVarKey ?? string.Empty);
+            ModelState.AddModelError(ResolveConfigVarErrorField(exception.Message), exception.Message);
         }
 
         await LoadPageDataAsync(id);
@@ -922,6 +1345,15 @@ public sealed class DetailsModel(
             AvailableBusinessAreas = await accessManagementService.GetVisibleBusinessAreasAsync(
                 User.GetEmail(),
                 User.IsAdmin() || User.IsSupport());
+
+            CompassConfigured = compassCatalogService.IsConfigured;
+            if (CompassConfigured)
+            {
+                CompassWorkItems = await compassCatalogService.GetActiveWorkItemsAsync();
+                CompassProducts = await compassCatalogService.GetProductsAsync();
+                SelectedCompassWorkItemId ??= Prototype!.CompassWorkItemId;
+                SelectedCompassProductId ??= Prototype.CompassProductId;
+            }
         }
 
         if (CanViewPassword)
@@ -941,6 +1373,8 @@ public sealed class DetailsModel(
         }
 
         ActivityItems = PrototypeActivityFeedBuilder.Build(Jobs, AuditEvents);
+        ApplyActivityPaging();
+        ExceptionRequests = await prototypeService.GetExceptionRequestsForPrototypeAsync(id);
 
         SwitchablePrototypes = (await prototypeService.GetVisibleAsync(
                 User.GetEmail(),
@@ -999,4 +1433,36 @@ public sealed class DetailsModel(
 
     private RedirectToPageResult RedirectToSettings(Guid id) =>
         RedirectToPage(new { id, section = SettingsSection });
+
+    private static string ResolveConfigVarErrorField(string message)
+    {
+        if (message.Contains("value", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("password must", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("characters or fewer", StringComparison.OrdinalIgnoreCase) &&
+            message.Contains("Values", StringComparison.Ordinal))
+        {
+            return nameof(ConfigVarValue);
+        }
+
+        return nameof(ConfigVarKey);
+    }
+
+    private static string ResolveHigherPlanErrorField(string message)
+    {
+        if (message.Contains("40 characters", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Explain why", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("legitimate research", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(ExceptionReason);
+        }
+
+        if (message.Contains("available higher plans", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("higher plan than", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Choose one", StringComparison.OrdinalIgnoreCase))
+        {
+            return nameof(RequestedSku);
+        }
+
+        return string.Empty;
+    }
 }

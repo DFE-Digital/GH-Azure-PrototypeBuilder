@@ -11,7 +11,9 @@
 
 <section id="prototype-app-settings"
          class="dfe-c-fe-panel govuk-!-margin-bottom-6"
-         data-setting-value-url="@Model.AppSettingValueUrl">
+         data-setting-value-url="@Model.AppSettingValueUrl"
+         data-settings-status-url="@Model.AppSettingsStatusUrl"
+         data-has-pending-sync="@(Model.HasPendingAppSettingsSync ? "true" : "false")">
     <div class="dfe-c-fe-panel__header">
         <div class="dfe-c-fe-panel__header--split">
             <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Environment settings</h2>
@@ -28,6 +30,7 @@
         <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
             Environment variables passed to the hosted prototype app, including the prototype password.
             Keys must start with a letter and use letters, numbers and underscores.
+            Values are synced with Azure App Service settings.
         </p>
     </div>
 
@@ -43,18 +46,21 @@
                 <tr class="govuk-table__row">
                     <th scope="col" class="govuk-table__header">Key</th>
                     <th scope="col" class="govuk-table__header">Value</th>
+                    <th scope="col" class="govuk-table__header prototype-settings-table__sync-col">
+                        <span class="govuk-visually-hidden">Azure sync</span>
+                    </th>
                     @if (Model.CanManage)
                     {
                         <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
                     }
                 </tr>
             </thead>
-            <tbody class="govuk-table__body">
+            <tbody class="govuk-table__body" id="prototype-app-settings-body">
             @foreach (var setting in userSettings)
             {
                 var isPassword = PrototypeAppSettingCatalog.IsPasswordKey(setting.Key);
 
-                <tr class="govuk-table__row" data-setting-key="@setting.Key">
+                <tr class="govuk-table__row" data-setting-key="@setting.Key" data-sync-status="@setting.SyncStatus">
                     <td class="govuk-table__cell">
                         <span class="prototype-settings-table__key">@setting.Key</span>
                         @if (!string.IsNullOrWhiteSpace(setting.Description))
@@ -62,7 +68,7 @@
                             <span class="prototype-settings-table__description">@setting.Description</span>
                         }
                     </td>
-                    <td class="govuk-table__cell">
+                    <td class="govuk-table__cell prototype-settings-table__value">
                         @if (isPassword)
                         {
                             <code class="dfe-c-fe-password-field__value">@Model.GetAppSettingDisplayValue(setting)</code>
@@ -71,6 +77,9 @@
                         {
                             @Model.GetAppSettingDisplayValue(setting)
                         }
+                    </td>
+                    <td class="govuk-table__cell prototype-settings-table__sync-col">
+                        @await Html.PartialAsync("_AppSettingSyncIcon", setting.SyncStatus)
                     </td>
                     @if (Model.CanManage)
                     {

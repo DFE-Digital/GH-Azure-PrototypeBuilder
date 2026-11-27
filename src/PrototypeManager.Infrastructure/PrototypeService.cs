@@ -13,11 +13,15 @@ internal sealed class PrototypeService(
     IGitHubOrganisationService githubOrganisationService,
     IGitHubTokenIdentityService gitHubTokenIdentityService,
     IGitHubAccessValidator gitHubAccessValidator,
+    ICompassCatalogService compassCatalogService,
+    IGitHubRepositoryAvailability gitHubRepositoryAvailability,
     IAuditService auditService,
     IJobSecretStore jobSecretStore,
     AzureWebAppSettingsSyncService azureWebAppSettingsSyncService,
     IAccessManagementService accessManagementService,
     IPrototypeWebAppRuntimeService webAppRuntimeService,
+    IAppServicePlanSkuService appServicePlanSkuService,
+    IExceptionRequestNotifier exceptionRequestNotifier,
     IOptions<ProvisioningOptions> provisioningOptions,
     IOptions<CostControlOptions> costControlOptions) : IPrototypeService
 {
@@ -104,12 +108,29 @@ internal sealed class PrototypeService(
             throw new ValidationException("Select a valid business area.");
         }
 
-        var appName = request.AppName.Trim();
+        var appName = SlugGenerator.NormaliseAppName(request.AppName);
+        SlugGenerator.ValidateAppName(appName);
         var organisation = request.GitHubOrganisation.Trim();
-        var repositoryName = request.GitHubRepositoryName.Trim().ToLowerInvariant();
         await githubOrganisationService.ValidateOwnerAsync(organisation);
         var repositoryOwner = await gitHubTokenIdentityService.ResolveRepositoryOwnerAsync(organisation);
+        var repositoryName = await AllocateUniqueRepositoryNameAsync(repositoryOwner, appName);
         var repositoryUrl = PrototypeGitHubRepositoryUrls.BuildRepositoryUrl(repositoryOwner, repositoryName);
+
+        var workItem = request.CompassWorkItemId is int workItemId
+            ? await compassCatalogService.FindWorkItemAsync(workItemId)
+            : null;
+        if (request.CompassWorkItemId is not null && workItem is null)
+        {
+            throw new ValidationException("Select a valid COMPASS work item.");
+        }
+
+        var product = !string.IsNullOrWhiteSpace(request.CompassProductId)
+            ? await compassCatalogService.FindProductAsync(request.CompassProductId)
+            : null;
+        if (!string.IsNullOrWhiteSpace(request.CompassProductId) && product is null)
+        {
+            throw new ValidationException("Select a valid COMPASS product.");
+        }
 
         var prototype = new Prototype
         {
@@ -123,6 +144,10 @@ internal sealed class PrototypeService(
             DeputyOwnerEmail = string.Empty,
             GitHubRepositoryUrl = repositoryUrl,
             RequiresRepositoryScaffold = true,
+            CompassWorkItemId = workItem?.Id,
+            CompassWorkItemTitle = workItem?.DisplayName ?? string.Empty,
+            CompassProductId = product?.Id,
+            CompassProductName = product?.Name ?? string.Empty,
             AzureSubscriptionId = _provisioningOptions.AzureSubscriptionId,
             Status = PrototypeStatus.Requested,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -137,6 +162,16 @@ internal sealed class PrototypeService(
         };
 
         dbContext.Prototypes.Add(prototype);
+        dbContext.TrackedGitHubRepositories.Add(new TrackedGitHubRepository
+        {
+            PrototypeId = prototype.Id,
+            RepositoryUrl = PrototypeGitHubRepositoryUrls.Normalize(repositoryUrl),
+            Owner = repositoryOwner,
+            RepositoryName = repositoryName,
+            PrototypeName = appName,
+            CreatedBy = NormalizeEmail(actorEmail),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
@@ -208,6 +243,7 @@ internal sealed class PrototypeService(
     {
         var prototypes = (await dbContext.Prototypes.AsNoTracking()
             .Include(x => x.BusinessArea)
+            .Include(x => x.Contacts)
             .ToListAsync())
             .Where(prototype => prototype.Status != PrototypeStatus.Deleted);
 
@@ -278,6 +314,11 @@ internal sealed class PrototypeService(
         .OrderByDescending(x => x.CreatedAt)
         .ToList();
 
+    public async Task<IReadOnlyList<ProvisioningJob>> GetAllJobsAsync() =>
+        (await dbContext.ProvisioningJobs.AsNoTracking().ToListAsync())
+        .OrderByDescending(job => job.CreatedAt)
+        .ToList();
+
     public async Task<IReadOnlyList<AuditEvent>> GetAuditEventsAsync(Guid prototypeId) =>
         (await dbContext.AuditEvents.AsNoTracking()
             .Where(x => x.PrototypeId == prototypeId)
@@ -286,9 +327,298 @@ internal sealed class PrototypeService(
         .ToList();
 
     public async Task<IReadOnlyList<ExceptionRequest>> GetExceptionRequestsAsync() =>
-        (await dbContext.ExceptionRequests.AsNoTracking().ToListAsync())
+        (await dbContext.ExceptionRequests.AsNoTracking()
+            .Include(request => request.Prototype)
+            .ToListAsync())
         .OrderByDescending(x => x.CreatedAt)
         .ToList();
+
+    public async Task<IReadOnlyList<ExceptionRequest>> GetExceptionRequestsForPrototypeAsync(Guid prototypeId) =>
+        (await dbContext.ExceptionRequests.AsNoTracking()
+            .Where(request => request.PrototypeId == prototypeId)
+            .ToListAsync())
+        .OrderByDescending(request => request.CreatedAt)
+        .ToList();
+
+    public async Task<IReadOnlyList<OrphanedGitHubRepository>> GetOrphanedGitHubRepositoriesAsync()
+    {
+        var tracked = await dbContext.TrackedGitHubRepositories.AsNoTracking()
+            .Where(item => item.ClearedAt == null)
+            .ToListAsync();
+
+        if (tracked.Count == 0)
+        {
+            return [];
+        }
+
+        var activeUrls = (await dbContext.Prototypes.AsNoTracking()
+                .Where(prototype =>
+                    prototype.Status != PrototypeStatus.Deleted &&
+                    prototype.GitHubRepositoryUrl != string.Empty)
+                .Select(prototype => prototype.GitHubRepositoryUrl)
+                .ToListAsync())
+            .Select(PrototypeGitHubRepositoryUrls.Normalize)
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var activePrototypeIds = (await dbContext.Prototypes.AsNoTracking()
+                .Where(prototype => prototype.Status != PrototypeStatus.Deleted)
+                .Select(prototype => prototype.Id)
+                .ToListAsync())
+            .ToHashSet();
+
+        return tracked
+            .Where(item =>
+            {
+                var normalizedUrl = PrototypeGitHubRepositoryUrls.Normalize(item.RepositoryUrl);
+                var hasActiveUrl = activeUrls.Contains(normalizedUrl);
+                var hasActivePrototype = item.PrototypeId is Guid prototypeId &&
+                                         activePrototypeIds.Contains(prototypeId);
+                return !hasActiveUrl && !hasActivePrototype;
+            })
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => new OrphanedGitHubRepository
+            {
+                Id = item.Id,
+                PrototypeId = item.PrototypeId,
+                RepositoryUrl = item.RepositoryUrl,
+                Owner = item.Owner,
+                RepositoryName = item.RepositoryName,
+                PrototypeName = item.PrototypeName,
+                CreatedBy = item.CreatedBy,
+                CreatedAt = item.CreatedAt,
+                Reason = item.PrototypeId is null
+                    ? "No linked prototype entry."
+                    : "Prototype entry was deleted from Prototype Manager."
+            })
+            .ToList();
+    }
+
+    public async Task MarkTrackedGitHubRepositoryClearedAsync(Guid trackedRepositoryId, string actorEmail)
+    {
+        var tracked = await dbContext.TrackedGitHubRepositories
+            .SingleOrDefaultAsync(item => item.Id == trackedRepositoryId)
+            ?? throw new ValidationException("Tracked GitHub repository not found.");
+
+        if (tracked.ClearedAt is not null)
+        {
+            return;
+        }
+
+        tracked.ClearedAt = DateTimeOffset.UtcNow;
+        tracked.ClearedBy = NormalizeEmail(actorEmail);
+        await dbContext.SaveChangesAsync();
+
+        await auditService.RecordAsync(
+            tracked.PrototypeId,
+            actorEmail,
+            "GitHub repository marked cleaned up",
+            $"Marked {tracked.RepositoryUrl} as cleaned up in GitHub.");
+    }
+
+    public async Task<ExceptionRequest> RequestHigherPlanAsync(
+        Guid prototypeId,
+        string requestedSku,
+        string reason,
+        string actorEmail,
+        bool isAdmin,
+        bool isSupport)
+    {
+        _ = await GetAccessibleAsync(prototypeId, actorEmail, isAdmin, isSupport)
+            ?? throw new ValidationException("Prototype not found.");
+
+        var prototype = await GetTrackedPrototypeAsync(prototypeId);
+        var contacts = await GetContactsAsync(prototypeId);
+        var normalizedActor = NormalizeEmail(actorEmail);
+
+        var canManage = isAdmin ||
+                        isSupport ||
+                        string.Equals(prototype.OwnerEmail, normalizedActor, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(prototype.DeputyOwnerEmail, normalizedActor, StringComparison.OrdinalIgnoreCase) ||
+                        contacts.Any(contact =>
+                            string.Equals(contact.Email, normalizedActor, StringComparison.OrdinalIgnoreCase));
+
+        if (!canManage)
+        {
+            throw new ValidationException("You do not have permission to request a higher plan for this prototype.");
+        }
+
+        var normalizedSku = (requestedSku ?? string.Empty).Trim().ToUpperInvariant();
+        var allowedHigherPlans = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "B1", "B2" };
+        if (!allowedHigherPlans.Contains(normalizedSku))
+        {
+            throw new ValidationException("Choose one of the available higher plans.");
+        }
+
+        if (_costControlOptions.AllowedSkus.Contains(normalizedSku, StringComparer.OrdinalIgnoreCase) ||
+            string.Equals(normalizedSku, prototype.Sku, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ValidationException("Choose a higher plan than the plan this prototype already uses.");
+        }
+
+        var normalizedReason = (reason ?? string.Empty).Trim();
+        if (normalizedReason.Length < 40)
+        {
+            throw new ValidationException(
+                "Explain why you need a higher plan in at least 40 characters. Include the legitimate research or stakeholder activity that may exceed free-plan limits.");
+        }
+
+        var hasOpenRequest = await dbContext.ExceptionRequests.AsNoTracking().AnyAsync(request =>
+            request.PrototypeId == prototypeId &&
+            request.Status == ExceptionRequestStatus.Requested);
+
+        if (hasOpenRequest)
+        {
+            throw new ValidationException("There is already an open higher-plan request for this prototype.");
+        }
+
+        var exceptionRequest = new ExceptionRequest
+        {
+            PrototypeId = prototypeId,
+            RequestedBy = normalizedActor,
+            RequestedSku = normalizedSku,
+            Reason = normalizedReason,
+            Status = ExceptionRequestStatus.Requested,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        dbContext.ExceptionRequests.Add(exceptionRequest);
+        prototype.ExceptionRequired = true;
+        await dbContext.SaveChangesAsync();
+
+        await auditService.RecordAsync(
+            prototypeId,
+            actorEmail,
+            "Higher plan requested",
+            $"Requested SKU {normalizedSku}. Reason: {normalizedReason}");
+
+        await exceptionRequestNotifier.NotifyExceptionRequestedAsync(prototype, exceptionRequest);
+
+        return exceptionRequest;
+    }
+
+    public async Task SetTemporarySkuAsync(Guid prototypeId, string sku, DateTimeOffset until, string actorEmail)
+    {
+        var prototype = await GetTrackedPrototypeAsync(prototypeId);
+        var normalizedSku = (sku ?? string.Empty).Trim().ToUpperInvariant();
+        var allowedPlans = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "B1", "B2" };
+
+        if (!allowedPlans.Contains(normalizedSku))
+        {
+            throw new ValidationException("Choose B1 or B2 for a temporary escalation.");
+        }
+
+        if (until.UtcDateTime <= DateTimeOffset.UtcNow.UtcDateTime)
+        {
+            throw new ValidationException("Choose a future date for when the plan should revert to Free.");
+        }
+
+        if (until.UtcDateTime > DateTimeOffset.UtcNow.AddDays(90).UtcDateTime)
+        {
+            throw new ValidationException("Temporary escalations can last at most 90 days.");
+        }
+
+        if (prototype.Status is not (PrototypeStatus.Live or PrototypeStatus.Failed))
+        {
+            throw new ValidationException("Only provisioned prototypes can have their plan changed.");
+        }
+
+        var baseline = string.IsNullOrWhiteSpace(prototype.BaselineSku)
+            ? (_costControlOptions.AllowedSkus.FirstOrDefault() ?? "F1")
+            : prototype.BaselineSku;
+
+        if (string.IsNullOrWhiteSpace(prototype.BaselineSku) ||
+            string.Equals(prototype.Sku, baseline, StringComparison.OrdinalIgnoreCase) ||
+            prototype.TemporarySkuUntil is null)
+        {
+            prototype.BaselineSku = string.IsNullOrWhiteSpace(prototype.Sku) ? baseline : prototype.Sku;
+            if (allowedPlans.Contains(prototype.BaselineSku))
+            {
+                prototype.BaselineSku = _costControlOptions.AllowedSkus.FirstOrDefault() ?? "F1";
+            }
+        }
+
+        await appServicePlanSkuService.EscalateToDedicatedPlanAsync(prototype, normalizedSku);
+        prototype.Sku = normalizedSku;
+        prototype.TemporarySkuUntil = until.ToUniversalTime();
+        prototype.ExceptionRequired = true;
+
+        var openRequest = await dbContext.ExceptionRequests
+            .Where(request =>
+                request.PrototypeId == prototypeId &&
+                request.Status == ExceptionRequestStatus.Requested)
+            .OrderByDescending(request => request.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (openRequest is not null)
+        {
+            openRequest.Status = ExceptionRequestStatus.Approved;
+            openRequest.ApprovedBy = NormalizeEmail(actorEmail);
+            openRequest.ApprovedAt = DateTimeOffset.UtcNow;
+            if (string.IsNullOrWhiteSpace(openRequest.RequestedSku))
+            {
+                openRequest.RequestedSku = normalizedSku;
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        await auditService.RecordAsync(
+            prototypeId,
+            actorEmail,
+            "Temporary plan set",
+            $"SKU set to {normalizedSku} until {until:yyyy-MM-dd}. Reverts to {prototype.BaselineSku}.");
+    }
+
+    public async Task RevertTemporarySkuAsync(Guid prototypeId, string actorEmail)
+    {
+        var prototype = await GetTrackedPrototypeAsync(prototypeId);
+        await RevertSkuInternalAsync(prototype, actorEmail, "Temporary plan reverted");
+    }
+
+    public async Task ProcessExpiredTemporarySkusAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        // SQLite cannot translate TemporarySkuUntil/Status enum filters together — load then filter in memory.
+        var candidates = await dbContext.Prototypes
+            .Where(prototype => prototype.TemporarySkuUntil != null)
+            .ToListAsync(cancellationToken);
+
+        var expired = candidates
+            .Where(prototype =>
+                prototype.TemporarySkuUntil <= now &&
+                prototype.Status != PrototypeStatus.Deleted)
+            .ToList();
+
+        foreach (var prototype in expired)
+        {
+            try
+            {
+                await RevertSkuInternalAsync(prototype, "system@prototype-manager", "Temporary plan expired");
+            }
+            catch
+            {
+                // Retry on the next worker cycle.
+            }
+        }
+    }
+
+    private async Task RevertSkuInternalAsync(Prototype prototype, string actorEmail, string auditAction)
+    {
+        var baseline = string.IsNullOrWhiteSpace(prototype.BaselineSku)
+            ? (_costControlOptions.AllowedSkus.FirstOrDefault() ?? "F1")
+            : prototype.BaselineSku.Trim().ToUpperInvariant();
+
+        await appServicePlanSkuService.RevertToFreePoolAsync(prototype);
+        prototype.Sku = baseline;
+        prototype.TemporarySkuUntil = null;
+        await dbContext.SaveChangesAsync();
+        await auditService.RecordAsync(
+            prototype.Id,
+            actorEmail,
+            auditAction,
+            $"SKU restored to {baseline}.");
+    }
 
     public async Task ExtendExpiryAsync(Guid id, DateTimeOffset newExpiryDate, string actorEmail)
     {
@@ -669,6 +999,14 @@ internal sealed class PrototypeService(
             throw new ValidationException("You do not have permission to view this prototype password.");
         }
 
+        // Azure is the source of truth once hosting exists, so portal changes are reflected in the app.
+        var azurePassword = await TryGetPasswordFromAzureAsync(prototype, id, actorEmail, recordAudit: false);
+        if (!string.IsNullOrWhiteSpace(azurePassword))
+        {
+            await auditService.RecordAsync(id, actorEmail, "Password viewed", "Prototype password was displayed to the user.");
+            return azurePassword;
+        }
+
         var jobs = await GetJobsAsync(id);
         var secretJob = jobs
             .Where(job => job.Type is ProvisioningJobType.Create
@@ -681,26 +1019,27 @@ internal sealed class PrototypeService(
 
         if (secretJob is null)
         {
-            return await TryGetPasswordFromAzureAsync(prototype, id, actorEmail);
+            return null;
         }
 
         var password = await jobSecretStore.GetAsync(secretJob.SecretReference);
 
-        if (!string.IsNullOrWhiteSpace(password))
+        if (string.IsNullOrWhiteSpace(password))
         {
-            await auditService.RecordAsync(id, actorEmail, "Password viewed", "Prototype password was displayed to the user.");
-            return password;
+            return null;
         }
 
-        return await TryGetPasswordFromAzureAsync(prototype, id, actorEmail);
+        await auditService.RecordAsync(id, actorEmail, "Password viewed", "Prototype password was displayed to the user.");
+        return password;
     }
 
     private async Task<string?> TryGetPasswordFromAzureAsync(
         Prototype prototype,
         Guid id,
-        string actorEmail)
+        string actorEmail,
+        bool recordAudit = true)
     {
-        if (string.IsNullOrWhiteSpace(prototype.AzureWebAppName))
+        if (!azureWebAppSettingsSyncService.IsAzureConfigured(prototype))
         {
             return null;
         }
@@ -716,7 +1055,11 @@ internal sealed class PrototypeService(
                 return null;
             }
 
-            await auditService.RecordAsync(id, actorEmail, "Password viewed", "Prototype password was displayed to the user.");
+            if (recordAudit)
+            {
+                await auditService.RecordAsync(id, actorEmail, "Password viewed", "Prototype password was displayed to the user.");
+            }
+
             return password;
         }
         catch
@@ -755,6 +1098,74 @@ internal sealed class PrototypeService(
             actorEmail,
             "Business area changed",
             $"Changed from {previousName} to {businessArea.Name}.");
+    }
+
+    public async Task UpdateCompassWorkItemAsync(
+        Guid id,
+        int? workItemId,
+        string actorEmail,
+        bool isAdmin,
+        bool isSupport)
+    {
+        await RequirePrototypeManagementAccessAsync(id, actorEmail, isAdmin, isSupport);
+        var prototype = await GetTrackedPrototypeAsync(id);
+
+        CompassWorkItemOption? workItem = null;
+        if (workItemId is int selectedId)
+        {
+            workItem = await compassCatalogService.FindWorkItemAsync(selectedId)
+                ?? throw new ValidationException("Select a valid COMPASS work item.");
+        }
+
+        var previous = string.IsNullOrWhiteSpace(prototype.CompassWorkItemTitle)
+            ? prototype.CompassWorkItemId?.ToString() ?? "None"
+            : prototype.CompassWorkItemTitle;
+
+        prototype.CompassWorkItemId = workItem?.Id;
+        prototype.CompassWorkItemTitle = workItem?.DisplayName ?? string.Empty;
+        await dbContext.SaveChangesAsync();
+
+        await auditService.RecordAsync(
+            id,
+            actorEmail,
+            "COMPASS work item updated",
+            workItem is null
+                ? $"Cleared COMPASS work item (was {previous})."
+                : $"Changed COMPASS work item from {previous} to {workItem.DisplayName}.");
+    }
+
+    public async Task UpdateCompassProductAsync(
+        Guid id,
+        string? productId,
+        string actorEmail,
+        bool isAdmin,
+        bool isSupport)
+    {
+        await RequirePrototypeManagementAccessAsync(id, actorEmail, isAdmin, isSupport);
+        var prototype = await GetTrackedPrototypeAsync(id);
+
+        CompassProductOption? product = null;
+        if (!string.IsNullOrWhiteSpace(productId))
+        {
+            product = await compassCatalogService.FindProductAsync(productId)
+                ?? throw new ValidationException("Select a valid COMPASS product.");
+        }
+
+        var previous = string.IsNullOrWhiteSpace(prototype.CompassProductName)
+            ? prototype.CompassProductId ?? "None"
+            : prototype.CompassProductName;
+
+        prototype.CompassProductId = product?.Id;
+        prototype.CompassProductName = product?.Name ?? string.Empty;
+        await dbContext.SaveChangesAsync();
+
+        await auditService.RecordAsync(
+            id,
+            actorEmail,
+            "COMPASS product updated",
+            product is null
+                ? $"Cleared COMPASS product (was {previous})."
+                : $"Changed COMPASS product from {previous} to {product.Name}.");
     }
 
     public async Task StartWebAppAsync(Guid id, string actorEmail, bool isAdmin, bool isSupport)
@@ -799,10 +1210,12 @@ internal sealed class PrototypeService(
 
     private async Task<string> ResolveScaffoldSecretReferenceAsync(Guid prototypeId)
     {
-        var jobs = await dbContext.ProvisioningJobs.AsNoTracking()
-            .Where(job => job.PrototypeId == prototypeId)
+        // Order in memory — SQLite cannot ORDER BY DateTimeOffset in SQL.
+        var jobs = (await dbContext.ProvisioningJobs.AsNoTracking()
+                .Where(job => job.PrototypeId == prototypeId)
+                .ToListAsync())
             .OrderByDescending(job => job.CreatedAt)
-            .ToListAsync();
+            .ToList();
 
         var secretReference = jobs
             .Where(job => job.Type is ProvisioningJobType.ScaffoldGitHubRepository
@@ -818,6 +1231,32 @@ internal sealed class PrototypeService(
         }
 
         return secretReference;
+    }
+
+    private async Task RequirePrototypeManagementAccessAsync(
+        Guid prototypeId,
+        string actorEmail,
+        bool isAdmin,
+        bool isSupport)
+    {
+        _ = await GetAccessibleAsync(prototypeId, actorEmail, isAdmin, isSupport)
+            ?? throw new ValidationException("Prototype not found.");
+
+        var prototype = await GetTrackedPrototypeAsync(prototypeId);
+        var contacts = await GetContactsAsync(prototypeId);
+        var normalizedActor = NormalizeEmail(actorEmail);
+
+        var canManage = isAdmin ||
+                        isSupport ||
+                        string.Equals(prototype.OwnerEmail, normalizedActor, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(prototype.DeputyOwnerEmail, normalizedActor, StringComparison.OrdinalIgnoreCase) ||
+                        contacts.Any(contact =>
+                            string.Equals(contact.Email, normalizedActor, StringComparison.OrdinalIgnoreCase));
+
+        if (!canManage)
+        {
+            throw new ValidationException("You do not have permission to manage this prototype.");
+        }
     }
 
     private static void RequireContactManagementAccess(Prototype prototype, string actorEmail, bool isAdmin, bool isSupport)
@@ -866,4 +1305,34 @@ internal sealed class PrototypeService(
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
+    private async Task<string> AllocateUniqueRepositoryNameAsync(string repositoryOwner, string appName)
+    {
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            var repositoryName = PrototypeRepositoryNaming.CreateRepositoryName(appName);
+            var repositoryUrl = PrototypeGitHubRepositoryUrls.BuildRepositoryUrl(repositoryOwner, repositoryName);
+
+            var existsLocally = await dbContext.Prototypes.AsNoTracking()
+                .AnyAsync(prototype =>
+                    prototype.Status != PrototypeStatus.Deleted &&
+                    (prototype.GitHubRepositoryUrl == repositoryUrl ||
+                     prototype.ServiceName == repositoryName));
+
+            if (existsLocally)
+            {
+                continue;
+            }
+
+            if (await gitHubRepositoryAvailability.ExistsAsync(repositoryOwner, repositoryName))
+            {
+                continue;
+            }
+
+            return repositoryName;
+        }
+
+        throw new ValidationException(
+            "Could not allocate a unique GitHub repository name. Try again in a moment.");
+    }
 }

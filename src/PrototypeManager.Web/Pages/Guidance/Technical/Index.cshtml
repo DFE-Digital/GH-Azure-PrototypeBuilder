@@ -1,0 +1,87 @@
+@page "/Guidance/Technical"
+@model PrototypeManager.Web.Pages.Guidance.Technical.TechnicalIndexModel
+@using PrototypeManager.Web.Pages.Guidance
+@{
+    ViewData["Title"] = "How it works";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.Technical;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Technical documentation</p>
+            <h1 class="dfe-c-fe-title">How it works</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Prototype Manager is an ASP.NET Core Razor app that queues background jobs to create GitHub repositories and Azure App Service hosting for prototypes.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Stack</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>ASP.NET Core Razor Pages with GOV.UK and DfE Frontend</li>
+        <li>EF Core — SQLite in development, SQL Server when hosted</li>
+        <li>Azure Resource Manager (ARM) SDK with compiled Bicep templates</li>
+        <li>GitHub App installation tokens for repository and Actions automation</li>
+        <li>Microsoft Entra ID in hosted environments; development auth locally</li>
+        <li>optional GOV.UK Notify and COMPASS integrations</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">High-level flow</h2>
+    <ol class="govuk-list govuk-list--number">
+        <li>A user creates or hosts a prototype in the web UI.</li>
+        <li>For host, the UI can search repositories and assess Prototype Kit / GOV.UK Frontend support before submit.</li>
+        <li>The app records the prototype and queues provisioning jobs.</li>
+        <li>A background worker scaffolds GitHub (when needed), then deploys Azure hosting.</li>
+        <li>When hosting is live, another job can configure GitHub Actions and the publish profile secret.</li>
+        <li>Pushes to <code>main</code> deploy through Actions; the UI manages access, settings, and lifecycle.</li>
+    </ol>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Main components</h2>
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Area</th>
+                <th scope="col" class="govuk-table__header">Responsibility</th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Web</td>
+                <td class="govuk-table__cell">Razor Pages UI, auth, admin tools, guidance</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Application</td>
+                <td class="govuk-table__cell">Contracts, options, access rules</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Infrastructure</td>
+                <td class="govuk-table__cell">EF Core, Azure provisioners, GitHub clients, worker, Notify/Compass</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Domain</td>
+                <td class="govuk-table__cell">Prototype model, naming, provisioning task IDs</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Local configuration</h2>
+    <p class="govuk-body">
+        Only anonymised example files are committed:
+        <code>appsettings.example.json</code> and <code>appsettings.Development.example.json</code>.
+        Copy them to <code>appsettings.json</code> / <code>appsettings.Development.json</code> for local use.
+        Those live files, and <code>*.pem</code> private keys, are gitignored — never commit secrets, tokens, or real GitHub App credentials.
+        See the repository README for the full local run steps.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Read next</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><a class="govuk-link" href="@Url.Page("/Guidance/Technical/Azure")">Azure hosting</a> — Free plan pool, Bicep, temporary SKUs</li>
+        <li><a class="govuk-link" href="@Url.Page("/Guidance/Technical/GitHub")">GitHub integration</a> — App permissions, search, scaffold, deploy workflow</li>
+        <li><a class="govuk-link" href="@Url.Page("/Guidance/Technical/Operations")">Jobs and access</a> — worker job types, roles, Notify and Compass</li>
+    </ul>
+</div>

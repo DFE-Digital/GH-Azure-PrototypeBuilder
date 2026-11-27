@@ -1,8 +1,8 @@
 @description('Azure region for the prototype hosting resources.')
 param location string
 
-@description('Name of the Linux App Service plan.')
-param appServicePlanName string
+@description('Resource ID of an existing Linux App Service plan (shared Free pool or dedicated escalation plan).')
+param appServicePlanId string
 
 @description('Name of the prototype web app.')
 param webAppName string
@@ -17,28 +17,13 @@ param prototypePassword string
 @description('Required resource tags.')
 param tags object
 
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: appServicePlanName
-  location: location
-  kind: 'linux'
-  sku: {
-    name: 'F1'
-    tier: 'Free'
-    capacity: 1
-  }
-  properties: {
-    reserved: true
-  }
-  tags: tags
-}
-
 resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   name: webAppName
   location: location
   kind: 'app,linux'
   tags: tags
   properties: {
-    serverFarmId: appServicePlan.id
+    serverFarmId: appServicePlanId
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: nodeRuntime

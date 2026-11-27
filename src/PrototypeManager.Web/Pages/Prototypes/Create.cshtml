@@ -1,23 +1,21 @@
 @page
 @model PrototypeManager.Web.Pages.Prototypes.CreateModel
 @{
-    ViewData["Title"] = "Create a prototype";
+    ViewData["Title"] = "Create a new prototype";
+    var repositoryUrlPreview = string.IsNullOrWhiteSpace(Model.Input.GitHubOrganisation)
+        ? string.Empty
+        : PrototypeGitHubRepositoryUrls.FormatRepositoryExample(Model.Input.GitHubOrganisation, Model.RepositoryNamePreview);
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_AddPrototypeSideNav")
 }
 
 <div class="dfe-c-fe-shell">
     <header class="dfe-c-fe-page-header">
         <div class="dfe-c-fe-page-header__intro">
-            <p class="dfe-c-fe-eyebrow">Prototype hosting</p>
-            <h1 class="dfe-c-fe-title">Create a prototype</h1>
-            <p class="dfe-c-fe-text">
-                We will create a GitHub repository, add the
-                <a class="govuk-link" href="https://prototype-kit.service.gov.uk/docs/install/getting-started-advanced" target="_blank" rel="noopener noreferrer">GOV.UK Prototype Kit</a>,
-                then provision Azure hosting and connect deployment.
-                @if (!string.IsNullOrWhiteSpace(User.GetEmail()))
-                {
-                    <span class="dfe-c-fe-meta">Signed in as @User.GetEmail()</span>
-                }
-            </p>
+            <h1 class="dfe-c-fe-title">Create a new prototype</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">Use this if you are starting a brand new prototype.</p>
         </div>
     </header>
 
@@ -26,7 +24,7 @@
             <h2 class="dfe-c-fe-heading">Already have a GitHub repository?</h2>
             <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
                 If your prototype code is already in GitHub, use
-                <a class="govuk-link" href="@Url.Page("/Prototypes/New")">Host prototype</a> instead.
+                <a class="govuk-link" href="@Url.Page("/Prototypes/New")">Host an existing prototype</a> instead.
             </p>
         </div>
     </section>
@@ -52,7 +50,7 @@
             </div>
         }
 
-        <form method="post" class="processing-trigger">
+        <form method="post" class="processing-trigger" id="create-prototype-form">
             @if (!string.IsNullOrWhiteSpace(Model.AuthenticatedGitHubLogin))
             {
                 <div class="govuk-inset-text">
@@ -63,57 +61,123 @@
 
             @if (Model.AllowedGitHubOrganisations.Any())
             {
-                <div class="govuk-form-group">
-                    <label class="govuk-label" asp-for="Input.GitHubOrganisation"></label>
-                    <span class="govuk-hint">
-                        Choose where the new repository should be created.
-                        @if (!string.IsNullOrWhiteSpace(Model.AuthenticatedGitHubLogin))
-                        {
-                            <text>For personal testing, select <strong>@Model.AuthenticatedGitHubLogin</strong>.</text>
-                        }
-                    </span>
-                    <span class="govuk-error-message" asp-validation-for="Input.GitHubOrganisation"></span>
-                    <select class="govuk-select"
-                            asp-for="Input.GitHubOrganisation"
-                            asp-items="@(new SelectList(Model.AllowedGitHubOrganisations, nameof(GitHubOrganisation.Name), nameof(GitHubOrganisation.Name), Model.Input.GitHubOrganisation))">
-                        @if (Model.AllowedGitHubOrganisations.Count > 1)
-                        {
-                            <option value="">Select a GitHub organisation</option>
-                        }
-                    </select>
-                </div>
+                @if (Model.UsesDfeDigitalOrganisation && !Model.ShowGitHubOrganisationPicker)
+                {
+                    <input type="hidden" asp-for="Input.GitHubOrganisation" />
+                    <div class="govuk-form-group">
+                        <p class="govuk-body govuk-!-margin-bottom-0">
+                            Your repo will be created in the DfE-Digital Enterprise organisation.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="Input.GitHubOrganisation"></label>
+                        <span class="govuk-hint">
+                            @if (Model.UsesDfeDigitalOrganisation)
+                            {
+                                <text>Your repo will be created in the DfE-Digital Enterprise organisation by default. Only change this for personal testing.</text>
+                            }
+                            else
+                            {
+                                <text>Choose where the new repository should be created.</text>
+                            }
+                        </span>
+                        <span class="govuk-error-message" asp-validation-for="Input.GitHubOrganisation"></span>
+                        <select class="govuk-select create-form__select"
+                                asp-for="Input.GitHubOrganisation"
+                                id="Input_GitHubOrganisation"
+                                asp-items="@(new SelectList(Model.AllowedGitHubOrganisations, nameof(GitHubOrganisation.Name), nameof(GitHubOrganisation.Name), Model.Input.GitHubOrganisation))">
+                            @if (Model.AllowedGitHubOrganisations.Count > 1)
+                            {
+                                <option value="">Select a GitHub organisation</option>
+                            }
+                        </select>
+                    </div>
+                }
             }
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="Input.AppName"></label>
-                <span class="govuk-hint">Lowercase, use hyphens and do not include spaces. For example, ey-training or teacher-vacancies. You don't need to include "prototype" in the app name.</span>
+                <span class="govuk-hint">
+                    Must start with a letter. Spaces become hyphens. Use lowercase letters, numbers and hyphens only — max @SlugGenerator.AppNameMaxLength characters.
+                    For example, <code>ey-training</code> or <code>teacher vacancies</code>. Do not include "prototype" in the name.
+                </span>
                 <span class="govuk-error-message" asp-validation-for="Input.AppName"></span>
-                <input class="govuk-input govuk-input--width-20" asp-for="Input.AppName" maxlength="20" autocomplete="off" />
+                <input class="govuk-input govuk-input--width-20"
+                       asp-for="Input.AppName"
+                       id="prototype-app-name"
+                       maxlength="@SlugGenerator.AppNameMaxLength"
+                       data-app-name-max-length="@SlugGenerator.AppNameMaxLength"
+                       autocomplete="off"
+                       data-repo-preview-target="repository-name-preview"
+                       data-repo-org-target="repository-url-preview" />
             </div>
+
+            <div class="govuk-inset-text" id="repository-preview">
+                <p class="govuk-body govuk-!-margin-bottom-1">Repo URL will be:</p>
+                <p class="govuk-body govuk-!-margin-bottom-2">
+                    <code id="repository-url-preview">@(string.IsNullOrWhiteSpace(repositoryUrlPreview) ? "https://github.com/DFE-Digital/" + Model.RepositoryNamePreview : repositoryUrlPreview)</code>
+                </p>
+                <p class="govuk-body-s govuk-!-margin-bottom-0" id="repository-name-preview-note">
+                    <span class="govuk-visually-hidden" id="repository-name-preview">@Model.RepositoryNamePreview</span>
+                    <code>xxxx</code> is replaced with a random string.
+                </p>
+            </div>
+
+            @if (Model.CompassConfigured)
+            {
+                <div class="govuk-form-group">
+                    <label class="govuk-label" asp-for="Input.CompassWorkItemId"></label>
+                    <span class="govuk-hint">
+                        Optional. Link this prototype to an active
+                        <a class="govuk-link" href="https://compass.education.gov.uk/modern/work/all" target="_blank" rel="noopener noreferrer">COMPASS work</a>
+                        item. If unsure, leave empty.
+                    </span>
+                    <span class="govuk-error-message" asp-validation-for="Input.CompassWorkItemId"></span>
+                    <select class="govuk-select create-form__select"
+                            asp-for="Input.CompassWorkItemId"
+                            asp-items="@(new SelectList(Model.CompassWorkItems, nameof(CompassWorkItemOption.Id), nameof(CompassWorkItemOption.Title), Model.Input.CompassWorkItemId))">
+                        <option value="">Not linked</option>
+                    </select>
+                </div>
+
+                <div class="govuk-form-group">
+                    <label class="govuk-label" asp-for="Input.CompassProductId"></label>
+                    <span class="govuk-hint">
+                        Optional. Link this prototype to a
+                        <a class="govuk-link" href="https://compass.education.gov.uk/modern/manage/fips/products?tab=active" target="_blank" rel="noopener noreferrer">COMPASS product</a>
+                        (enterprise services excluded). Business areas are shown next to the product name.
+                    </span>
+                    <span class="govuk-error-message" asp-validation-for="Input.CompassProductId"></span>
+                    <select class="govuk-select create-form__select"
+                            asp-for="Input.CompassProductId"
+                            asp-items="@(new SelectList(Model.CompassProducts, nameof(CompassProductOption.Id), nameof(CompassProductOption.DisplayName), Model.Input.CompassProductId))">
+                        <option value="">Not linked</option>
+                    </select>
+                </div>
+            }
+            else
+            {
+                <div class="govuk-inset-text">
+                    COMPASS linking is unavailable until <code>CompassApi:BaseUrl</code> and <code>CompassApi:ApiToken</code> are configured.
+                </div>
+            }
 
             <div class="govuk-form-group">
-                <label class="govuk-label" asp-for="Input.GitHubRepositoryName"></label>
-                <span class="govuk-hint">
-                    @if (!string.IsNullOrWhiteSpace(Model.Input.GitHubOrganisation))
-                    {
-                        <text>Your repository will be created at @PrototypeGitHubRepositoryUrls.FormatRepositoryExample(Model.Input.GitHubOrganisation, Model.Input.GitHubRepositoryName).</text>
-                    }
-                    else
-                    {
-                        <text>Lowercase letters, numbers and hyphens only. Usually the same as your prototype app name.</text>
-                    }
-                </span>
-                <span class="govuk-error-message" asp-validation-for="Input.GitHubRepositoryName"></span>
-                <input class="govuk-input govuk-input--width-20" asp-for="Input.GitHubRepositoryName" maxlength="100" autocomplete="off" />
+                <label class="govuk-label" asp-for="Input.PrototypePassword"></label>
+                <div class="govuk-hint">
+                    All prototypes must be password protected. You'll be able to update this once your app is created. @PrototypePasswordRules.MinimumLength characters minimum.
+                </div>
+                <span class="govuk-error-message" asp-validation-for="Input.PrototypePassword"></span>
+                <input class="govuk-input govuk-input--width-20"
+                       asp-for="Input.PrototypePassword"
+                       id="prototype-password"
+                       type="text"
+                       autocomplete="new-password"
+                       spellcheck="false" />
             </div>
-
-            <govuk-password-input for="Input.PrototypePassword"
-                                  id="prototype-password"
-                                  autocomplete="new-password"
-                                  input-class="govuk-input--width-20">
-                <govuk-password-input-label asp-for="Input.PrototypePassword" />
-                <govuk-password-input-hint>All prototypes must be password protected. You'll be able to update this once your app is created. @PrototypePasswordRules.MinimumLength characters minimum.</govuk-password-input-hint>
-            </govuk-password-input>
 
             @if (Model.AvailableBusinessAreas.Any())
             {
@@ -121,7 +185,7 @@
                     <label class="govuk-label" asp-for="Input.BusinessAreaId">Business area</label>
                     <span class="govuk-hint">Select the business area responsible for this prototype.</span>
                     <span class="govuk-error-message" asp-validation-for="Input.BusinessAreaId"></span>
-                    <select class="govuk-select"
+                    <select class="govuk-select create-form__select"
                             asp-for="Input.BusinessAreaId"
                             asp-items="@(new SelectList(Model.AvailableBusinessAreas, nameof(BusinessArea.Id), nameof(BusinessArea.Name), Model.Input.BusinessAreaId))">
                         @if (Model.AvailableBusinessAreas.Count > 1)
@@ -146,3 +210,100 @@
         </form>
     </div>
 </div>
+
+<script>
+(() => {
+  const appNameInput = document.getElementById('prototype-app-name');
+  const urlPreview = document.getElementById('repository-url-preview');
+  const orgSelect = document.getElementById('Input_GitHubOrganisation');
+  const orgHidden = document.querySelector('input[name="Input.GitHubOrganisation"][type="hidden"]');
+  if (!appNameInput || !urlPreview) {
+    return;
+  }
+
+  const maxLength = Number(appNameInput.getAttribute('data-app-name-max-length') || '25');
+
+  // While typing, keep a trailing hyphen so spaces/hyphens are not wiped mid-word.
+  const normalise = (value, { allowTrailingHyphen = false } = {}) => {
+    let result = '';
+    let previousHyphen = false;
+
+    for (const character of value.replace(/^\s+/, '')) {
+      let next = '';
+      if (/\s|[_.]/.test(character)) {
+        next = '-';
+      } else if (/[A-Za-z0-9-]/.test(character)) {
+        next = character.toLowerCase();
+      } else {
+        continue;
+      }
+
+      if (next === '-') {
+        if (!result || previousHyphen) {
+          continue;
+        }
+        previousHyphen = true;
+        result += '-';
+        continue;
+      }
+
+      if (!result && /[0-9]/.test(next)) {
+        continue;
+      }
+
+      previousHyphen = false;
+      result += next;
+    }
+
+    result = result.replace(/^-+/g, '').slice(0, maxLength);
+
+    if (!allowTrailingHyphen) {
+      result = result.replace(/-+$/g, '');
+    }
+
+    return result;
+  };
+
+  const selectedOrganisation = () => {
+    if (orgSelect && orgSelect.value) {
+      return orgSelect.value;
+    }
+    if (orgHidden && orgHidden.value) {
+      return orgHidden.value;
+    }
+    return 'DFE-Digital';
+  };
+
+  const applyValue = (normalised) => {
+    if (appNameInput.value !== normalised) {
+      const start = appNameInput.selectionStart;
+      appNameInput.value = normalised;
+      if (typeof start === 'number') {
+        appNameInput.setSelectionRange(Math.min(start, normalised.length), Math.min(start, normalised.length));
+      }
+    }
+
+    const previewName = normalised.replace(/-+$/g, '');
+    const repoName = previewName
+      ? ('prototype-xxxx-' + previewName)
+      : 'prototype-xxxx-';
+    urlPreview.textContent = 'https://github.com/' + selectedOrganisation() + '/' + repoName;
+  };
+
+  const updateWhileTyping = () => {
+    applyValue(normalise(appNameInput.value, { allowTrailingHyphen: true }));
+  };
+
+  const finalise = () => {
+    applyValue(normalise(appNameInput.value, { allowTrailingHyphen: false }));
+  };
+
+  appNameInput.addEventListener('input', updateWhileTyping);
+  appNameInput.addEventListener('blur', finalise);
+  appNameInput.form?.addEventListener('submit', finalise);
+  if (orgSelect) {
+    orgSelect.addEventListener('change', updateWhileTyping);
+  }
+  updateWhileTyping();
+})();
+</script>

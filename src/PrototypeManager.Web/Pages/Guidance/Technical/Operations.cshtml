@@ -1,0 +1,87 @@
+@page
+@model OperationsModel
+@using PrototypeManager.Web.Pages.Guidance
+@{
+    ViewData["Title"] = "Jobs and access";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.TechnicalOperations;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">Technical documentation</p>
+            <h1 class="dfe-c-fe-title">Jobs and access</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                How the provisioning worker runs jobs, how visibility is decided, and which optional integrations are wired in.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Provisioning worker</h2>
+    <p class="govuk-body">
+        A hosted background service polls for queued jobs (roughly every few seconds) and also reverts expired temporary SKUs.
+        Provisioning mode can be <code>Azure</code> or <code>Mock</code> for local testing.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Job types</h2>
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Job</th>
+                <th scope="col" class="govuk-table__header">What it does</th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">ScaffoldGitHubRepository</td>
+                <td class="govuk-table__cell">Create/scaffold the GitHub repo, then queue Create</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Create / Retry</td>
+                <td class="govuk-table__cell">Deploy Azure hosting; mark Live; may queue deploy config; Notify ready email</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">ConfigureGitHubDeployment</td>
+                <td class="govuk-table__cell">Publish profile secret, workflow, optional first deploy + verify</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">UpdatePassword</td>
+                <td class="govuk-table__cell">Patch the Azure <code>PASSWORD</code> app setting</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">UpdateAppSettings</td>
+                <td class="govuk-table__cell">Sync allowed config vars to the web app</td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">Delete</td>
+                <td class="govuk-table__cell">Delete the Azure resource group; leave GitHub in place</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="govuk-body">
+        Create and Retry wait until any pending scaffold for that prototype has finished.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Access model</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>Entra ID</strong> (hosted) or development auth (local)</li>
+        <li>roles include User, Admin, and Support</li>
+        <li>business area assignments scope which prototypes non-admins can see</li>
+        <li>prototype-level roles: owner, deputy owner, and contacts</li>
+        <li>admins and support can manage more broadly; only owners (or admin/support) change ownership and contacts</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Optional integrations</h2>
+    <ul class="govuk-list govuk-list--bullet">
+        <li><strong>GOV.UK Notify</strong> — prototype-ready email to the owner; exception-request and feature-suggestion emails to DesignOps</li>
+        <li><strong>COMPASS</strong> — cached catalog of work items and products for linking on create (API token in local config only)</li>
+    </ul>
+    <p class="govuk-body">
+        When those integrations are not configured, null implementations are registered so provisioning still succeeds.
+        API keys and tokens belong in gitignored <code>appsettings.json</code> / <code>appsettings.Development.json</code> (or user secrets), not in the example files committed to the repository.
+    </p>
+</div>

@@ -1,0 +1,89 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.AdminsModel
+@{
+    ViewData["Title"] = "Prototype Manager admins";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.AdminsSection;
+}
+
+<h1 class="govuk-heading-l">@AdminNavigation.SectionTitle(AdminNavigation.AdminsSection)</h1>
+<p class="govuk-body">
+    Prototype Manager admins can view every prototype and use all admin pages, including access management,
+    GitHub cleanup, and exception requests.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    <govuk-notification-banner>
+        <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+        <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+    </govuk-notification-banner>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+        </div>
+    </div>
+}
+
+<form method="post" class="prototype-action-form">
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="Input.Email"></label>
+        <span class="govuk-error-message" asp-validation-for="Input.Email"></span>
+        <input class="govuk-input" asp-for="Input.Email" autocomplete="off" />
+    </div>
+
+    <div class="govuk-form-group">
+        <label class="govuk-label" asp-for="Input.DisplayName"></label>
+        <input class="govuk-input" asp-for="Input.DisplayName" autocomplete="off" />
+    </div>
+
+    <govuk-button>Add Prototype Manager admin</govuk-button>
+</form>
+
+<h2 class="govuk-heading-m govuk-!-margin-top-8">Current admins</h2>
+@if (!Model.Admins.Any())
+{
+    <p class="govuk-body">No Prototype Manager admins have been set yet.</p>
+}
+else
+{
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Email</th>
+                <th scope="col" class="govuk-table__header">Display name</th>
+                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+        @foreach (var admin in Model.Admins)
+        {
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">@admin.Email</td>
+                <td class="govuk-table__cell">
+                    @(string.IsNullOrWhiteSpace(admin.DisplayName) ? "—" : admin.DisplayName)
+                </td>
+                <td class="govuk-table__cell">
+                    @if (!string.Equals(admin.Email, User.GetEmail(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        <form method="post" asp-page-handler="Remove">
+                            <input type="hidden" name="email" value="@admin.Email" />
+                            <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                                Remove admin
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <span class="govuk-hint govuk-!-margin-bottom-0">You</span>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

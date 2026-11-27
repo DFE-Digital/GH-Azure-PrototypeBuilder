@@ -1,0 +1,34 @@
+@using PrototypeManager.Web.Pages.Guidance
+@{
+    var activeSection = ViewData[GuidanceNavigation.SectionViewDataKey] as string ?? GuidanceNavigation.Overview;
+}
+
+<nav class="app-side-nav__panel" aria-label="Guidance">
+    <p class="app-side-nav__heading">User guide</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in GuidanceNavigation.UserGuideItems)
+    {
+        var href = GuidanceNavigation.Href(Url, item);
+        var active = string.Equals(activeSection, item.Id, StringComparison.Ordinal);
+        <li class="app-side-nav__item @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href" aria-current="@(active ? "page" : null)">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+
+    <p class="app-side-nav__heading">Technical documentation</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in GuidanceNavigation.TechnicalItems)
+    {
+        var href = GuidanceNavigation.Href(Url, item);
+        var active = string.Equals(activeSection, item.Id, StringComparison.Ordinal);
+        <li class="app-side-nav__item @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href" aria-current="@(active ? "page" : null)">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+</nav>

@@ -1,0 +1,62 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.PrototypesModel
+@{
+    ViewData["Title"] = "Manage prototypes";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.PrototypesSection;
+}
+
+<h1 class="govuk-heading-l">@AdminNavigation.SectionTitle(AdminNavigation.PrototypesSection)</h1>
+<p class="govuk-body">
+    Manage every prototype from one place: change Azure plans, remove people, or delete entries.
+</p>
+
+@if (!Model.Prototypes.Any())
+{
+    <p class="govuk-body">There are no prototypes yet.</p>
+}
+else
+{
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Prototype</th>
+                <th scope="col" class="govuk-table__header">Owner</th>
+                <th scope="col" class="govuk-table__header">Status</th>
+                <th scope="col" class="govuk-table__header">Plan</th>
+                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+        @foreach (var prototype in Model.Prototypes)
+        {
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                    <a class="govuk-link" asp-page="/Admin/PrototypeManage" asp-route-id="@prototype.Id">
+                        @prototype.Name
+                    </a>
+                    @if (!string.IsNullOrWhiteSpace(prototype.BusinessArea?.Name))
+                    {
+                        <br />
+                        <span class="govuk-hint govuk-!-margin-bottom-0">@prototype.BusinessArea.Name</span>
+                    }
+                </td>
+                <td class="govuk-table__cell">@prototype.OwnerEmail</td>
+                <td class="govuk-table__cell">@prototype.Status</td>
+                <td class="govuk-table__cell">
+                    @(string.IsNullOrWhiteSpace(prototype.Sku) ? "—" : prototype.Sku)
+                    @if (prototype.TemporarySkuUntil is not null)
+                    {
+                        <br />
+                        <span class="govuk-hint govuk-!-margin-bottom-0">
+                            Until @prototype.TemporarySkuUntil.Value.ToString("dd MMM yyyy")
+                        </span>
+                    }
+                </td>
+                <td class="govuk-table__cell">
+                    <a class="govuk-link" asp-page="/Admin/PrototypeManage" asp-route-id="@prototype.Id">Manage</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

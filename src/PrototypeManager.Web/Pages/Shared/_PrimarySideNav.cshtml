@@ -1,0 +1,54 @@
+@using PrototypeManager.Web
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    var browseItems = AppNavigation.PrimaryItems.Where(item =>
+        item.Page is "/Prototypes/List");
+    var addItems = AppNavigation.PrimaryItems.Where(item =>
+        item.Page is "/Prototypes/Create" or "/Prototypes/New");
+    var helpItems = AppNavigation.PrimaryItems.Where(item =>
+        item.Page is "/Features" or "/GettingStarted");
+}
+
+<nav class="app-side-nav__panel" aria-label="Primary">
+    <p class="app-side-nav__heading">Browse</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in browseItems)
+    {
+        var href = AppNavigation.Href(Url, item);
+        var active = AppNavigation.IsActive(path, item);
+        <li class="app-side-nav__item @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href" aria-current="@(active ? "page" : null)">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+
+    <p class="app-side-nav__heading">Add a prototype</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in addItems)
+    {
+        var href = AppNavigation.Href(Url, item);
+        var active = AppNavigation.IsActive(path, item);
+        <li class="app-side-nav__item @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href" aria-current="@(active ? "page" : null)">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+
+    <p class="app-side-nav__heading">Help</p>
+    <ul class="app-side-nav__list">
+    @foreach (var item in helpItems)
+    {
+        var href = AppNavigation.Href(Url, item);
+        var active = AppNavigation.IsActive(path, item);
+        <li class="app-side-nav__item @(active ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link" href="@href" aria-current="@(active ? "page" : null)">
+                <span class="app-side-nav__label">@item.Title</span>
+            </a>
+        </li>
+    }
+    </ul>
+</nav>

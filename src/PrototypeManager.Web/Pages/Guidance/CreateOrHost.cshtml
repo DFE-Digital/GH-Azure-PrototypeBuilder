@@ -1,0 +1,92 @@
+@page
+@model CreateOrHostModel
+@{
+    ViewData["Title"] = "Create or host";
+    ViewData[GuidanceNavigation.SectionViewDataKey] = GuidanceNavigation.CreateOrHost;
+}
+
+@section SideNav {
+    @await Html.PartialAsync("_GuidanceSideNav")
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <p class="dfe-c-fe-eyebrow">User guide</p>
+            <h1 class="dfe-c-fe-title">Create or host</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Two ways to get hosting: start a new Prototype Kit repository, or connect one you already have.
+            </p>
+        </div>
+    </header>
+
+    <h2 class="govuk-heading-m">Which option should I use?</h2>
+    <table class="govuk-table">
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Situation</th>
+                <th scope="col" class="govuk-table__header">Use</th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">You’re starting from scratch</td>
+                <td class="govuk-table__cell">
+                    <a class="govuk-link" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                </td>
+            </tr>
+            <tr class="govuk-table__row">
+                <td class="govuk-table__cell">The code is already in GitHub (for example after Heroku)</td>
+                <td class="govuk-table__cell">
+                    <a class="govuk-link" href="@Url.Page("/Prototypes/New")">Host an existing prototype</a>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Create a prototype</h2>
+    <p class="govuk-body">
+        Create makes a private GitHub repository with the GOV.UK Prototype Kit, then queues Azure hosting.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>repos are created in the allowed organisation (for example DfE-Digital)</li>
+        <li>use a short app name — lowercase letters, numbers and hyphens</li>
+        <li>
+            link a
+            <a class="govuk-link" href="https://compass.education.gov.uk/modern/work/all" target="_blank" rel="noopener noreferrer">COMPASS work</a>
+            item and
+            <a class="govuk-link" href="https://compass.education.gov.uk/modern/manage/fips/products?tab=active" target="_blank" rel="noopener noreferrer">COMPASS product</a>
+            when you can
+        </li>
+        <li>choose a business area so the right people can find the prototype</li>
+        <li>confirm the prototype will not hold real user data or run as a live service</li>
+    </ul>
+    <p class="govuk-body">
+        After you submit, you’ll go to the setup page while GitHub and Azure work runs in the background.
+    </p>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Host an existing repository</h2>
+    <p class="govuk-body">
+        Host connects a repository you already have to Azure hosting. Provisioning and deploy setup work the same way as Create.
+    </p>
+    <ul class="govuk-list govuk-list--bullet">
+        <li>search for the repository by name — results come from organisations the GitHub App can access</li>
+        <li>each result shows whether the repo looks supported (GOV.UK Prototype Kit in <code>package.json</code>)</li>
+        <li>when you select a repo, the app name is suggested from the repository name (the word <code>prototype</code> is removed)</li>
+        <li>if found, the selection shows the GOV.UK Frontend version and how it compares to the latest release</li>
+        <li>choose a password and business area, then submit</li>
+        <li>the repository should build and run as a Node prototype on the <code>main</code> branch</li>
+    </ul>
+
+    <h2 class="govuk-heading-m govuk-!-margin-top-6">Hosting limits to know before you start</h2>
+    <p class="govuk-body">
+        Free-tier hosting has a small daily processing budget. Prefer local testing; use the hosted URL mainly for research and demos.
+        Read more in <a class="govuk-link" href="@Url.Page("/Guidance/AdminAndLimits")">Admin and limits</a>.
+        See also <a class="govuk-link" href="@Url.Page("/Features")">Features</a> for what’s available now and what’s planned.
+    </p>
+
+    <div class="govuk-button-group govuk-!-margin-top-6">
+        <govuk-button-link href="@Url.Page("/Prototypes/Create")">Create a prototype</govuk-button-link>
+        <govuk-button-link href="@Url.Page("/Prototypes/New")" class="govuk-button--secondary">Host an existing prototype</govuk-button-link>
+    </div>
+</div>

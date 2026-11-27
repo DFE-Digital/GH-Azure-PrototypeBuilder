@@ -5,98 +5,109 @@
     ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.DashboardSection;
 }
 
-<span class="govuk-caption-l">Administration</span>
-<h1 class="govuk-heading-l">Admin</h1>
-
-<div class="govuk-grid-row prototype-details-layout">
-    <div class="govuk-grid-column-one-third">
-        <partial name="_AdminNav" />
-    </div>
-
-    <div class="govuk-grid-column-two-thirds">
-        <h2 class="govuk-heading-m">@AdminNavigation.SectionTitle(AdminNavigation.DashboardSection)</h2>
-        <p class="govuk-body">Overview of prototypes, business areas and administrator access.</p>
-
-        <div class="govuk-grid-row">
-            <div class="govuk-grid-column-one-half">
-                <h3 class="govuk-heading-s">Failed deployments</h3>
-                @if (!Model.FailedPrototypes.Any())
-                {
-                    <p class="govuk-body">There are no failed deployments.</p>
-                }
-                else
-                {
-                    <ul class="govuk-list govuk-list--bullet">
-                    @foreach (var prototype in Model.FailedPrototypes)
-                    {
-                        <li><a class="govuk-link" asp-page="/Prototypes/Details" asp-route-id="@prototype.Id">@prototype.Name</a></li>
-                    }
-                    </ul>
-                }
-            </div>
-            <div class="govuk-grid-column-one-half">
-                <h3 class="govuk-heading-s">Expiring soon</h3>
-                @if (!Model.ExpiringSoon.Any())
-                {
-                    <p class="govuk-body">No prototypes are expiring soon.</p>
-                }
-                else
-                {
-                    <ul class="govuk-list govuk-list--bullet">
-                    @foreach (var prototype in Model.ExpiringSoon)
-                    {
-                        <li>
-                            <a class="govuk-link" asp-page="/Prototypes/Details" asp-route-id="@prototype.Id">@prototype.Name</a>
-                            by @prototype.ExpiresAt.ToString("dd MMM yyyy")
-                        </li>
-                    }
-                    </ul>
-                }
-            </div>
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <h1 class="dfe-c-fe-title">@AdminNavigation.SectionTitle(AdminNavigation.DashboardSection)</h1>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                Overview of prototypes, users, business areas, and deployment health.
+            </p>
         </div>
+    </header>
 
-        <h3 class="govuk-heading-s govuk-!-margin-top-6">All prototypes</h3>
-        <p class="govuk-body">@Model.AllPrototypes.Count prototype records in the system.</p>
-
-        <h3 class="govuk-heading-s">Business areas</h3>
-        @if (!Model.BusinessAreas.Any())
-        {
-            <p class="govuk-body">There are no business areas yet.</p>
-        }
-        else
-        {
-            <table class="govuk-table">
-                <thead class="govuk-table__head">
-                    <tr class="govuk-table__row">
-                        <th scope="col" class="govuk-table__header">Business area</th>
-                        <th scope="col" class="govuk-table__header">Prototype count</th>
-                    </tr>
-                </thead>
-                <tbody class="govuk-table__body">
-                @foreach (var businessArea in Model.BusinessAreas)
+    <div class="dfe-c-fe-dashboard__metrics govuk-!-margin-bottom-6">
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Business areas</h2>
+            <p class="dfe-c-fe-metric__value">@Model.BusinessAreaCount</p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Total prototypes</h2>
+            <p class="dfe-c-fe-metric__value">@Model.TotalPrototypeCount</p>
+            <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                <a class="govuk-link" asp-page="/Admin/Prototypes">Manage prototypes</a>
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Users</h2>
+            <p class="dfe-c-fe-metric__value">@Model.TotalUserCount</p>
+            <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                <a class="govuk-link" asp-page="/Admin/Users">Manage access</a>
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Exception requests</h2>
+            <p class="dfe-c-fe-metric__value">
+                @if (Model.OpenExceptionRequestCount > 0)
                 {
-                    <tr class="govuk-table__row">
-                        <td class="govuk-table__cell">@businessArea.Name</td>
-                        <td class="govuk-table__cell">@businessArea.PrototypeCount</td>
-                    </tr>
+                    <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">@Model.OpenExceptionRequestCount</span>
                 }
-                </tbody>
-            </table>
-        }
-
-        <h3 class="govuk-heading-s govuk-!-margin-top-6">Admins</h3>
-        @if (!Model.Users.Any(user => user.IsAdmin))
-        {
-            <p class="govuk-body">There are no application admins configured.</p>
-        }
-        else
-        {
-            <ul class="govuk-list govuk-list--bullet">
-            @foreach (var user in Model.Users.Where(user => user.IsAdmin))
-            {
-                <li>@user.Email</li>
-            }
-            </ul>
-        }
+                else
+                {
+                    @Model.OpenExceptionRequestCount
+                }
+            </p>
+            <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                <a class="govuk-link" asp-page="/Admin/Exceptions">Review requests</a>
+            </p>
+        </section>
     </div>
+
+    <h2 class="govuk-heading-m">Deployments</h2>
+    <div class="dfe-c-fe-dashboard__metrics govuk-!-margin-bottom-6">
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Active</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="dfe-c-fe-badge dfe-c-fe-badge--success">@Model.ActiveDeploymentCount</span>
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Live or in progress, with a recent successful deployment.
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Stale</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">@Model.StaleDeploymentCount</span>
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Live, but no successful deployment for over 2 months.
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Failed</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">@Model.FailedDeploymentCount</span>
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Failed hosting status or latest job failed.
+            </p>
+        </section>
+    </div>
+
+    <h2 class="govuk-heading-m">Business areas</h2>
+    @if (!Model.BusinessAreas.Any())
+    {
+        <p class="govuk-body">There are no business areas yet.</p>
+    }
+    else
+    {
+        <div class="dfe-c-fe-dashboard__metrics admin-business-area-cards">
+        @foreach (var area in Model.BusinessAreas)
+        {
+            <section class="dfe-c-fe-panel dfe-c-fe-metric">
+                <h3 class="dfe-c-fe-metric__label">Business area</h3>
+                <p class="dfe-c-fe-metric__value">@area.Name</p>
+                <dl class="admin-business-area-cards__stats govuk-!-margin-top-3 govuk-!-margin-bottom-0">
+                    <div class="admin-business-area-cards__stat">
+                        <dt>Prototypes</dt>
+                        <dd>@area.PrototypeCount</dd>
+                    </div>
+                    <div class="admin-business-area-cards__stat">
+                        <dt>Users</dt>
+                        <dd>@area.UserCount</dd>
+                    </div>
+                </dl>
+            </section>
+        }
+        </div>
+    }
 </div>

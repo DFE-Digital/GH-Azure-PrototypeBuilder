@@ -5,8 +5,26 @@
     ViewData["Title"] = $"Setting up {Model.Prototype?.Name}";
 }
 
-@section BeforeContent {
-    <govuk-back-link href="@Url.Page("/Prototypes/List")">Back to prototypes</govuk-back-link>
+@section SideNav {
+    @if (Model.Prototype is not null)
+    {
+        <nav class="app-side-nav__panel" aria-label="Prototype setup">
+            <a class="app-side-nav__back govuk-link" asp-page="/Prototypes/List">All prototypes</a>
+            <p class="app-side-nav__heading">This prototype</p>
+            <ul class="app-side-nav__list">
+                <li class="app-side-nav__item">
+                    <a class="app-side-nav__link" asp-page="/Prototypes/Details" asp-route-id="@Model.Prototype.Id">
+                        <span class="app-side-nav__label">Prototype details</span>
+                    </a>
+                </li>
+                <li class="app-side-nav__item app-side-nav__item--active">
+                    <a class="app-side-nav__link" asp-page="/Prototypes/Setup" asp-route-id="@Model.Prototype.Id" aria-current="page">
+                        <span class="app-side-nav__label">Setting up</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
 }
 
 @if (Model.Prototype is null)
@@ -26,7 +44,6 @@
 
     <header class="dfe-c-fe-page-header setup-page__header">
         <div class="dfe-c-fe-page-header__intro">
-            <p class="dfe-c-fe-eyebrow">@(Model.Prototype.BusinessArea?.Name ?? "Prototype hosting")</p>
             <h1 class="dfe-c-fe-title">Setting up @Model.Prototype.Name</h1>
             <p class="dfe-c-fe-text setup-page__intro govuk-!-margin-bottom-0" id="provisioning-progress-summary">
                 @if (Model.Progress.IsComplete)
@@ -56,187 +73,250 @@
     </header>
 
     <div id="provisioning-progress"
+         class="setup-page__layout"
          aria-live="polite"
          data-progress-url="@Url.Page("/Prototypes/Setup", "Progress", new { id = Model.Prototype.Id })"
          data-admin-url="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })"
          data-retry-provisioning-url="@Url.Page("/Prototypes/Retry", new { id = Model.Prototype.Id })"
          data-retry-github-url="@Url.Page("/Prototypes/ConfigureGithub", new { id = Model.Prototype.Id })">
 
-        <section class="dfe-c-fe-panel setup-page__progress-panel @SetupModel.GetProgressPanelClass(Model.Progress) govuk-!-margin-bottom-6"
-                 id="provisioning-progress-panel">
-            <div class="setup-page__progress-meta">
-                <div>
-                    <p class="setup-page__progress-count govuk-!-margin-bottom-0" id="provisioning-progress-count">
-                        @Model.CompletedTaskCount of @Model.TotalTaskCount tasks complete
-                    </p>
-                    <p class="setup-page__live-indicator govuk-!-margin-bottom-0"
-                       id="provisioning-progress-live"
-                       hidden="@(!Model.Progress.IsActive)">
-                        Updating automatically
-                    </p>
-                </div>
-                <p class="setup-page__progress-percent govuk-!-margin-bottom-0" id="provisioning-progress-percent">
-                    @Model.ProgressPercentage%
-                </p>
-            </div>
-            <div class="setup-page__progress-track" aria-hidden="true">
-                <div class="setup-page__progress-bar"
-                     id="provisioning-progress-bar"
-                     style="width: @Model.ProgressPercentage%"></div>
-            </div>
-        </section>
-
-        <section class="dfe-c-fe-panel govuk-!-margin-bottom-6">
-            <div class="dfe-c-fe-panel__header">
-                <div>
-                    <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Setup tasks</h2>
-                    <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
-                        Provisioning Azure hosting, configuring GitHub deployment, and verifying your live site.
+        <div class="setup-page__main">
+            <section class="dfe-c-fe-panel setup-page__progress-panel @SetupModel.GetProgressPanelClass(Model.Progress) govuk-!-margin-bottom-6"
+                     id="provisioning-progress-panel">
+                <div class="setup-page__progress-meta">
+                    <div>
+                        <p class="setup-page__progress-count govuk-!-margin-bottom-0" id="provisioning-progress-count">
+                            @Model.CompletedTaskCount of @Model.TotalTaskCount tasks complete
+                        </p>
+                        <p class="setup-page__live-indicator govuk-!-margin-bottom-0"
+                           id="provisioning-progress-live"
+                           hidden="@(!Model.Progress.IsActive)">
+                            Updating automatically
+                        </p>
+                    </div>
+                    <p class="setup-page__progress-percent govuk-!-margin-bottom-0" id="provisioning-progress-percent">
+                        @Model.ProgressPercentage%
                     </p>
                 </div>
-            </div>
+                <div class="setup-page__progress-track" aria-hidden="true">
+                    <div class="setup-page__progress-bar"
+                         id="provisioning-progress-bar"
+                         style="width: @Model.ProgressPercentage%"></div>
+                </div>
+            </section>
 
-            <ol class="setup-task-list" id="provisioning-progress-tasks">
-                @for (var index = 0; index < Model.Progress.Tasks.Count; index++)
-                {
-                    var task = Model.Progress.Tasks[index];
-                    var statusClass = task.Status.ToLowerInvariant();
-                    var showTaskError = string.Equals(task.Status, "Failed", StringComparison.Ordinal)
-                        && !string.IsNullOrWhiteSpace(Model.Progress.ErrorMessage);
-                    <li class="setup-task-list__item setup-task-list__item--@statusClass" data-task-id="@task.Id">
-                        <span class="setup-task-list__marker" aria-hidden="true">@(index + 1)</span>
-                        <div class="setup-task-list__content">
-                            <div class="setup-task-list__header">
-                                <h3 class="setup-task-list__title">@task.Label</h3>
-                                <span class="@SetupModel.GetTaskTagClass(task.Status)">@SetupModel.GetTaskStatusLabel(task.Status)</span>
+            <section class="dfe-c-fe-panel govuk-!-margin-bottom-6">
+                <div class="dfe-c-fe-panel__header">
+                    <div>
+                        <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Setup tasks</h2>
+                        <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
+                            Provisioning Azure hosting, configuring GitHub deployment, and verifying your live site.
+                        </p>
+                    </div>
+                </div>
+
+                <ol class="setup-task-list" id="provisioning-progress-tasks">
+                    @for (var index = 0; index < Model.Progress.Tasks.Count; index++)
+                    {
+                        var task = Model.Progress.Tasks[index];
+                        var statusClass = task.Status.ToLowerInvariant();
+                        var isFailedTask = string.Equals(task.Status, "Failed", StringComparison.Ordinal);
+                        var showRetryOnTask = isFailedTask &&
+                            string.Equals(task.Id, Model.Retry.FailedTaskId, StringComparison.Ordinal) &&
+                            (Model.Retry.CanRetryScaffold || Model.Retry.CanRetryProvisioning || Model.Retry.CanRetryGitHubDeployment);
+                        <li class="setup-task-list__item setup-task-list__item--@statusClass" data-task-id="@task.Id">
+                            <span class="setup-task-list__marker" aria-hidden="true">@(index + 1)</span>
+                            <div class="setup-task-list__content">
+                                <div class="setup-task-list__header">
+                                    <h3 class="setup-task-list__title">@task.Label</h3>
+                                    <span class="@SetupModel.GetTaskTagClass(task.Status)">@SetupModel.GetTaskStatusLabel(task.Status)</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(task.Description))
+                                {
+                                    <p class="setup-task-list__hint">@task.Description</p>
+                                }
+                                <div class="setup-task-list__retry" data-task-retry-slot hidden></div>
+                                @if (isFailedTask && !string.IsNullOrWhiteSpace(Model.Retry.BlockedReason) &&
+                                     string.Equals(task.Id, Model.Retry.FailedTaskId, StringComparison.Ordinal) &&
+                                     !showRetryOnTask)
+                                {
+                                    <p class="setup-task-list__retry-blocked">@Model.Retry.BlockedReason</p>
+                                }
                             </div>
-                            @if (!string.IsNullOrWhiteSpace(task.Description))
-                            {
-                                <p class="setup-task-list__hint">@task.Description</p>
-                            }
-                            @if (showTaskError)
-                            {
-                                <details class="setup-task-list__error-details">
-                                    <summary class="setup-task-list__error-summary">View error details</summary>
-                                    <pre class="setup-task-list__error-message" id="provisioning-progress-error">@Model.Progress.ErrorMessage</pre>
-                                </details>
-                            }
-                        </div>
-                    </li>
-                }
-            </ol>
-        </section>
-
-        <section class="dfe-c-fe-panel setup-page__outcome setup-page__outcome--success"
-                 id="provisioning-progress-complete"
-                 hidden="@(!(Model.Progress.IsComplete && !Model.Progress.IsFailed))">
-            <div class="setup-page__outcome-content">
-                <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-2">Your prototype is ready</h2>
-                <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
-                    @Model.Prototype.Name is live with password protection enabled.
-                </p>
-            </div>
-            <div class="govuk-button-group setup-page__outcome-actions govuk-!-margin-bottom-0">
-                <a class="govuk-button"
-                   id="provisioning-progress-live-url"
-                   href="@Model.Prototype.PrototypeUrl"
-                   target="_blank"
-                   rel="noopener noreferrer">
-                    Open live prototype
-                </a>
-                <a class="govuk-button govuk-button--secondary"
-                   id="provisioning-progress-admin-url"
-                   href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })">
-                    Manage prototype
-                </a>
-            </div>
-        </section>
-
-        <section class="dfe-c-fe-panel setup-page__outcome setup-page__outcome--failed"
-                 id="provisioning-progress-failed"
-                 hidden="@(!Model.Progress.IsFailed)">
-            <div class="setup-page__outcome-content">
-                <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-2">Setup could not be completed</h2>
-                <p class="dfe-c-fe-text" id="provisioning-progress-failed-summary">
-                    @if (Model.Retry.CanRetryProvisioning || Model.Retry.CanRetryScaffold || Model.Retry.CanRetryGitHubDeployment)
-                    {
-                        @:Fix the issue if you can, then retry the failed step below.
+                        </li>
                     }
-                    else if (!string.IsNullOrWhiteSpace(Model.Retry.BlockedReason))
+                </ol>
+
+                <div id="provisioning-progress-retry-forms"
+                     hidden
+                     data-initial-failed-task-id="@Model.Retry.FailedTaskId"
+                     data-initial-can-retry-scaffold="@Model.Retry.CanRetryScaffold.ToString().ToLowerInvariant()"
+                     data-initial-can-retry-provisioning="@Model.Retry.CanRetryProvisioning.ToString().ToLowerInvariant()"
+                     data-initial-can-retry-github="@Model.Retry.CanRetryGitHubDeployment.ToString().ToLowerInvariant()"
+                     data-initial-retry-label="@SetupRetryEvaluator.GetRetryButtonLabel(Model.Retry.FailedTaskId)">
+                    <form method="post"
+                          asp-page="/Prototypes/RetryScaffold"
+                          asp-route-id="@Model.Prototype.Id"
+                          class="processing-trigger setup-page__retry-form"
+                          data-retry-kind="scaffold"
+                          hidden
+                          data-processing-title="Retrying GitHub setup"
+                          data-processing-message="Queuing another attempt to create the GitHub repository and add the Prototype Kit. This page will update automatically.">
+                        <button type="submit" class="govuk-button" data-retry-label>Retry this step</button>
+                    </form>
+                    <form method="post"
+                          asp-page="/Prototypes/Retry"
+                          asp-route-id="@Model.Prototype.Id"
+                          class="processing-trigger setup-page__retry-form"
+                          data-retry-kind="provisioning"
+                          hidden
+                          data-processing-title="Retrying setup"
+                          data-processing-message="Queuing another setup attempt. This page will update automatically.">
+                        <button type="submit" class="govuk-button" data-retry-label>Retry this step</button>
+                    </form>
+                    <form method="post"
+                          asp-page="/Prototypes/ConfigureGithub"
+                          asp-route-id="@Model.Prototype.Id"
+                          class="processing-trigger setup-page__retry-form"
+                          data-retry-kind="github"
+                          hidden
+                          data-processing-title="Retrying GitHub deployment"
+                          data-processing-message="Queuing another GitHub deployment attempt. This page will update automatically.">
+                        <button type="submit" class="govuk-button" data-retry-label>Retry this step</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="dfe-c-fe-panel setup-page__outcome setup-page__outcome--success"
+                     id="provisioning-progress-complete"
+                     hidden="@(!(Model.Progress.IsComplete && !Model.Progress.IsFailed))">
+                <div class="setup-page__outcome-content">
+                    <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-2">Your prototype is ready</h2>
+                    <p class="dfe-c-fe-text govuk-!-margin-bottom-0">
+                        @Model.Prototype.Name is live with password protection enabled.
+                    </p>
+                </div>
+                <div class="govuk-button-group setup-page__outcome-actions govuk-!-margin-bottom-0">
+                    <a class="govuk-button"
+                       id="provisioning-progress-live-url"
+                       href="@Model.Prototype.PrototypeUrl"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        Open live prototype
+                    </a>
+                    <a class="govuk-button govuk-button--secondary"
+                       id="provisioning-progress-admin-url"
+                       href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })">
+                        Manage prototype
+                    </a>
+                </div>
+            </section>
+
+            <section class="dfe-c-fe-panel setup-page__outcome setup-page__outcome--failed"
+                     id="provisioning-progress-failed"
+                     hidden="@(!Model.Progress.IsFailed)">
+                <div class="setup-page__outcome-content">
+                    <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-2">Setup could not be completed</h2>
+                    <p class="dfe-c-fe-text" id="provisioning-progress-failed-summary">
+                        @if (Model.Retry.CanRetryProvisioning || Model.Retry.CanRetryScaffold || Model.Retry.CanRetryGitHubDeployment)
+                        {
+                            @:Fix the issue if you can, then use Retry on the failed step above.
+                        }
+                        else if (!string.IsNullOrWhiteSpace(Model.Retry.BlockedReason))
+                        {
+                            @Model.Retry.BlockedReason
+                        }
+                        else if (Model.HasLiveHosting)
+                        {
+                            @:Hosting is already available. You can manage the prototype and retry later without deleting it.
+                        }
+                        else
+                        {
+                            @:Review the failed task above. Retry if you can, or delete this prototype and start again.
+                        }
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(Model.Progress.ErrorMessage))
                     {
-                        @Model.Retry.BlockedReason
+                        <details class="setup-page__error-details">
+                            <summary class="setup-page__error-summary">Technical error details</summary>
+                            <pre class="setup-page__error-message" id="provisioning-progress-failed-error">@Model.Progress.ErrorMessage</pre>
+                        </details>
+                    }
+                </div>
+                <div class="govuk-button-group setup-page__outcome-actions govuk-!-margin-bottom-0"
+                     id="provisioning-progress-retry-actions">
+                    @if (Model.HasLiveHosting)
+                    {
+                        <a class="govuk-button"
+                           id="provisioning-progress-failed-manage-url"
+                           href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })">
+                            Manage prototype
+                        </a>
+                        @if (!string.IsNullOrWhiteSpace(Model.Prototype.PrototypeUrl))
+                        {
+                            <a class="govuk-button govuk-button--secondary"
+                               href="@Model.Prototype.PrototypeUrl"
+                               target="_blank"
+                               rel="noopener noreferrer">
+                                Open live prototype
+                            </a>
+                        }
                     }
                     else
                     {
-                        @:Review the failed task above. Retry if you can, or delete this prototype and start again.
+                        <a class="govuk-button govuk-button--secondary"
+                           id="provisioning-progress-failed-url"
+                           href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })">
+                            View prototype details
+                        </a>
                     }
-                </p>
-                @if (!string.IsNullOrWhiteSpace(Model.Progress.ErrorMessage))
+                    @if (Model.CanDeletePrototype && !Model.HasLiveHosting)
+                    {
+                        <form method="post"
+                              asp-page="/Prototypes/Delete"
+                              asp-route-id="@Model.Prototype.Id"
+                              id="delete-prototype-form"
+                              class="processing-trigger setup-page__delete-form"
+                              data-prototype-name="@Model.Prototype.Name"
+                              data-deletes-github-repo="@(Model.Prototype.RequiresRepositoryScaffold ? "true" : "false")"
+                              data-processing-title="Deleting prototype"
+                              data-processing-message="@(Model.Prototype.RequiresRepositoryScaffold ? "Queuing removal of Azure hosting. The GitHub repository will be left for manual cleanup." : "Queuing removal of the hosting environment. This may take a minute.")">
+                            <button type="button"
+                                    class="govuk-button govuk-button--warning"
+                                    id="delete-prototype-open">
+                                Delete prototype
+                            </button>
+                            @await Html.PartialAsync("_DeletePrototypeModal")
+                        </form>
+                    }
+                </div>
+            </section>
+        </div>
+
+        <aside class="setup-page__guidance dfe-c-fe-panel" id="setup-stage-guidance" aria-labelledby="setup-stage-guidance-title">
+            <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-2" id="setup-stage-guidance-title">What’s happening</h2>
+            <p class="setup-page__guidance-current-label govuk-!-margin-bottom-1" id="setup-stage-current-label">
+                @Model.CurrentStageTitle
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-4" id="setup-stage-current-body">
+                @Model.CurrentStageExplanation
+            </p>
+
+            <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Stages</h3>
+            <ol class="setup-page__guidance-stages" id="setup-stage-list">
+                @foreach (var task in Model.Progress.Tasks)
                 {
-                    <details class="setup-page__error-details">
-                        <summary class="setup-page__error-summary">Technical error details</summary>
-                        <pre class="setup-page__error-message" id="provisioning-progress-failed-error">@Model.Progress.ErrorMessage</pre>
-                    </details>
+                    var isCurrent = string.Equals(task.Id, Model.CurrentStageId, StringComparison.Ordinal);
+                    <li class="setup-page__guidance-stage @(isCurrent ? "setup-page__guidance-stage--current" : null)"
+                        data-stage-id="@task.Id"
+                        data-stage-label="@task.Label"
+                        data-stage-explanation="@SetupModel.ExplainStage(task.Id)">
+                        <p class="setup-page__guidance-stage-title govuk-!-margin-bottom-1">@task.Label</p>
+                        <p class="setup-page__guidance-stage-body govuk-!-margin-bottom-0">@SetupModel.ExplainStage(task.Id)</p>
+                    </li>
                 }
-            </div>
-            <div class="govuk-button-group setup-page__outcome-actions govuk-!-margin-bottom-0"
-                 id="provisioning-progress-retry-actions">
-                <form method="post"
-                      id="provisioning-progress-retry-scaffold"
-                      asp-page="/Prototypes/RetryScaffold"
-                      asp-route-id="@Model.Prototype.Id"
-                      class="processing-trigger setup-page__retry-form"
-                      hidden="@(!Model.Retry.CanRetryScaffold)"
-                      data-processing-title="Retrying GitHub setup"
-                      data-processing-message="Queuing another attempt to create the GitHub repository and add the Prototype Kit. This page will update automatically.">
-                    <govuk-button class="govuk-button">Retry GitHub repository setup</govuk-button>
-                </form>
-                <form method="post"
-                      id="provisioning-progress-retry-provisioning"
-                      asp-page="/Prototypes/Retry"
-                      asp-route-id="@Model.Prototype.Id"
-                      class="processing-trigger setup-page__retry-form"
-                      hidden="@(!Model.Retry.CanRetryProvisioning)"
-                      data-processing-title="Retrying setup"
-                      data-processing-message="Queuing another setup attempt. This page will update automatically.">
-                    <govuk-button class="govuk-button">Retry setup</govuk-button>
-                </form>
-                <form method="post"
-                      id="provisioning-progress-retry-github"
-                      asp-page="/Prototypes/ConfigureGithub"
-                      asp-route-id="@Model.Prototype.Id"
-                      class="processing-trigger setup-page__retry-form"
-                      hidden="@(!Model.Retry.CanRetryGitHubDeployment)"
-                      data-processing-title="Retrying GitHub deployment"
-                      data-processing-message="Queuing another GitHub deployment attempt. This page will update automatically.">
-                    <govuk-button class="govuk-button">Retry GitHub deployment</govuk-button>
-                </form>
-                <a class="govuk-button govuk-button--secondary"
-                   id="provisioning-progress-failed-url"
-                   href="@Url.Page("/Prototypes/Details", new { id = Model.Prototype.Id })">
-                    View prototype details
-                </a>
-                @if (Model.CanDeletePrototype)
-                {
-                    <form method="post"
-                          asp-page="/Prototypes/Delete"
-                          asp-route-id="@Model.Prototype.Id"
-                          id="delete-prototype-form"
-                          class="processing-trigger setup-page__delete-form"
-                          data-prototype-name="@Model.Prototype.Name"
-                          data-deletes-github-repo="@(Model.Prototype.RequiresRepositoryScaffold ? "true" : "false")"
-                          data-processing-title="Deleting prototype"
-                          data-processing-message="@(Model.Prototype.RequiresRepositoryScaffold ? "Queuing removal of the Azure hosting environment and GitHub repository. This may take a minute." : "Queuing removal of the hosting environment. This may take a minute.")">
-                        <button type="button"
-                                class="govuk-button govuk-button--warning"
-                                id="delete-prototype-open">
-                            Delete prototype
-                        </button>
-                        @await Html.PartialAsync("_DeletePrototypeModal")
-                    </form>
-                }
-            </div>
-        </section>
+            </ol>
+        </aside>
     </div>
 </div>
 

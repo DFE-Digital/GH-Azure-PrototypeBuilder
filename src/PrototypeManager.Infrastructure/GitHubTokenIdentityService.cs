@@ -13,8 +13,14 @@ internal sealed class GitHubTokenIdentityService(
 
     public async Task<string?> TryGetAuthenticatedLoginAsync(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(GitHubTokenNormalizer.Normalize(_githubOptions.PersonalAccessToken)))
+        if (!_githubOptions.IsConfigured)
         {
+            return null;
+        }
+
+        if (_githubOptions.HasGitHubAppCredentials)
+        {
+            // Installation tokens are not user-scoped; there is no personal login.
             return null;
         }
 
@@ -24,6 +30,19 @@ internal sealed class GitHubTokenIdentityService(
     public async Task<string> ResolveRepositoryOwnerAsync(string selectedOwner, CancellationToken cancellationToken = default)
     {
         var owner = selectedOwner.Trim();
+
+        if (_githubOptions.HasGitHubAppCredentials)
+        {
+            if (await IsOrganisationAsync(owner, cancellationToken))
+            {
+                return owner;
+            }
+
+            throw new ValidationException(
+                $"GitHub organisation '{owner}' was not found, or the GitHub App installation cannot access it. " +
+                "Confirm the organisation is listed in Admin and that the app is installed on that organisation.");
+        }
+
         var authenticatedLogin = await GetAuthenticatedLoginAsync(cancellationToken);
 
         if (string.Equals(owner, authenticatedLogin, StringComparison.OrdinalIgnoreCase))
@@ -45,8 +64,8 @@ internal sealed class GitHubTokenIdentityService(
         }
 
         throw new ValidationException(
-            $"GitHub organisation or account '{owner}' was not found, or the personal access token cannot access it. " +
-            $"Check the name in Admin and authorize the token for that organisation. " +
+            $"GitHub organisation or account '{owner}' was not found, or the configured credentials cannot access it. " +
+            $"Check the name in Admin and authorize access for that organisation. " +
             $"The configured token belongs to {authenticatedLogin}.");
     }
 

@@ -1,0 +1,21 @@
+@using PrototypeManager.Web
+@{
+    var snippet = AppHelpContent.Resolve(Context.Request);
+}
+
+<div class="app-help">
+    <h2 class="app-help__title">@snippet.Title</h2>
+    <div class="app-help__body">
+        @Html.Raw(snippet.BodyHtml)
+    </div>
+    <div class="app-help__contact">
+        <h3 class="app-help__contact-title">Need help from DesignOps?</h3>
+        <p class="app-help__contact-text">
+            Email
+            <a class="govuk-link" href="mailto:@AppHelpContent.DesignOpsEmail">@AppHelpContent.DesignOpsEmail</a>
+        </p>
+        <p class="app-help__contact-text">
+            <a class="govuk-link" href="@Url.Page("/GettingStarted")">How to use Prototype Manager</a>
+        </p>
+    </div>
+</div>

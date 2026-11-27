@@ -1,0 +1,352 @@
+@page
+@model FeaturesModel
+@{
+    ViewData["Title"] = "Features";
+    var featureHasError = ViewData.ModelState[nameof(Model.Feature)]?.Errors.Count > 0;
+    var problemHasError = ViewData.ModelState[nameof(Model.Problem)]?.Errors.Count > 0;
+    var hasModalErrors = !ViewData.ModelState.IsValid && Model.ShowSuggestModal;
+}
+
+<div class="dfe-c-fe-shell dfe-c-fe-features">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <govuk-notification-banner>
+            <govuk-notification-banner-title>Success</govuk-notification-banner-title>
+            <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+        </govuk-notification-banner>
+    }
+
+    <header class="dfe-c-fe-features__hero">
+        <div class="dfe-c-fe-features__hero-copy">
+            <p class="dfe-c-fe-eyebrow">Prototype Manager</p>
+            <h1 class="govuk-heading-xl dfe-c-fe-features__title">Built for fast, safe prototyping</h1>
+            <p class="govuk-body-l dfe-c-fe-features__lead">
+                Host GOV.UK Prototype Kit apps on DfE infrastructure today — and see what’s coming next for templates, journeys, and branding.
+            </p>
+            <div class="dfe-c-fe-features__hero-actions">
+                <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                <button type="button"
+                        class="govuk-button govuk-button--secondary"
+                        data-open-suggest-feature>
+                    Suggest a feature
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section class="dfe-c-fe-features__section" aria-labelledby="available-now-heading">
+        <div class="dfe-c-fe-features__section-intro">
+            <h2 class="govuk-heading-l" id="available-now-heading">Available now</h2>
+            <p class="govuk-body">
+                Everything you need to get a prototype live for research and stakeholder review — without Azure portal access.
+            </p>
+        </div>
+
+        <ul class="dfe-c-fe-benefit-grid">
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--cost">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon dfe-c-fe-benefit-card__icon--glyph" aria-hidden="true">£</span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">Free hosting</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    Run on the approved free tier by default, with cost controls and approved regions so prototypes stay cheap and compliant.
+                </p>
+            </li>
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--azure">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" focusable="false">
+                            <path fill="currentColor" d="M12 3.5 4.5 6.2v5.3c0 4.4 3.1 8.4 7.5 9.5 4.4-1.1 7.5-5.1 7.5-9.5V6.2L12 3.5Z" opacity=".16"/>
+                            <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                                  d="M12 3.5 4.5 6.2v5.3c0 4.4 3.1 8.4 7.5 9.5 4.4-1.1 7.5-5.1 7.5-9.5V6.2L12 3.5Z"/>
+                            <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                                  d="m9.4 12.1 1.8 1.8 3.5-3.9"/>
+                        </svg>
+                    </span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">Managed infrastructure</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    DesignOps provisions and runs Azure hosting for you. You stay in Prototype Manager and GitHub.
+                </p>
+            </li>
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--speed">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" focusable="false">
+                            <path fill="currentColor" d="M13 3 5.2 13.8h5.1L9.8 21 18.8 10.2h-5.2L13 3Z" opacity=".18"/>
+                            <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                                  d="M13 3 5.2 13.8h5.1L9.8 21 18.8 10.2h-5.2L13 3Z"/>
+                        </svg>
+                    </span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">Live in minutes</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    Start a new Prototype Kit repo or connect an existing one. Hosting and automatic deploys can be ready quickly.
+                </p>
+            </li>
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--research">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" focusable="false">
+                            <circle cx="12" cy="12" r="8.2" fill="currentColor" opacity=".14"/>
+                            <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                                  d="M7 12h10M13.5 8.5 17 12l-3.5 3.5"/>
+                        </svg>
+                    </span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">Migrate from Heroku</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    Point us at your existing kit repository and move hosting into Prototype Manager without rebuilding from scratch.
+                </p>
+            </li>
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--github">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98 96" fill="currentColor" focusable="false">
+                            <path fill-rule="evenodd" clip-rule="evenodd"
+                                  d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.336-3.015.336-3.015 4.934.346 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/>
+                        </svg>
+                    </span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">GitHub-first workflow</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    Keep code in GitHub. Clone locally, push to main, and deploys can update the hosted prototype automatically.
+                </p>
+            </li>
+            <li class="dfe-c-fe-benefit-card dfe-c-fe-benefit-card--team">
+                <div class="dfe-c-fe-benefit-card__header">
+                    <span class="dfe-c-fe-benefit-card__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" focusable="false">
+                            <circle cx="12" cy="12" r="8.2" fill="currentColor" opacity=".14"/>
+                            <circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.8"/>
+                            <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8"/>
+                            <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                  d="M12 3.8v2.4M12 17.8v2.4M3.8 12h2.4M17.8 12h2.4"/>
+                        </svg>
+                    </span>
+                    <h3 class="govuk-heading-s dfe-c-fe-benefit-card__title">Research-ready access</h3>
+                </div>
+                <p class="govuk-body dfe-c-fe-benefit-card__text">
+                    Business areas and contacts control who can manage each app. Share a password-protected URL for research and demos.
+                </p>
+            </li>
+        </ul>
+    </section>
+
+    <section class="dfe-c-fe-features__section" aria-labelledby="coming-later-heading">
+        <div class="dfe-c-fe-features__section-intro">
+            <h2 class="govuk-heading-l" id="coming-later-heading">Coming later</h2>
+            <p class="govuk-body">
+                We’re making it easier to build realistic, accessible prototypes using common components, patterns and ready-made user journeys. This means less time setting up prototypes and more time exploring, testing and improving services.
+            </p>
+        </div>
+
+        <ol class="dfe-c-fe-features__roadmap">
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag">Early 2027</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">DfE Design System 3.0</h3>
+                    <p class="govuk-body">
+                        Build prototypes using the latest DfE components, patterns, styles and branding. The prototype kit will align with the new design system, making it easier to follow departmental standards and design consistently across services.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">GOV.UK content page templates</h3>
+                    <p class="govuk-body">
+                        Create realistic GOV.UK content pages using ready-made templates for guidance, publications, collections and long-form content. Prototype how users find, navigate and understand information without having to build page layouts from scratch.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">Sign-in and authentication journeys</h3>
+                    <p class="govuk-body">
+                        Use ready-made sign-in, account creation, password recovery and two-factor authentication (2FA) journeys to explore and test how users access services.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">Ready-made user journeys</h3>
+                    <p class="govuk-body">
+                        Choose from a range of common user journeys when creating a prototype, including linear forms, branching questions and account-based services. Start with a structure that reflects how users interact with your service.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">Common service patterns</h3>
+                    <p class="govuk-body">
+                        Quickly build transactional journeys using ready-made templates for start pages, question pages, check answers, confirmation pages and task lists. Combine established GOV.UK patterns to prototype complete end-to-end journeys.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">Data, charts and maps</h3>
+                    <p class="govuk-body">
+                        Create more realistic prototypes using sample data, data sources, interactive charts and maps. Explore how users understand information, monitor performance, make decisions and interact with geographical data.
+                    </p>
+                </div>
+            </li>
+            <li class="dfe-c-fe-features__roadmap-item">
+                <div class="dfe-c-fe-features__roadmap-meta">
+                    <span class="dfe-c-fe-features__tag dfe-c-fe-features__tag--planned">Planned</span>
+                </div>
+                <div class="dfe-c-fe-features__roadmap-body">
+                    <h3 class="govuk-heading-m">Flexible branding</h3>
+                    <p class="govuk-body">
+                        Configure your prototype to use GOV.UK or DfE branding, including headers, typography and styles. Explore journeys that span different products and services, including transitions between GOV.UK and DfE-branded experiences.
+                    </p>
+                </div>
+            </li>
+        </ol>
+    </section>
+
+    <section class="dfe-c-fe-features__suggest" aria-labelledby="suggest-heading">
+        <div class="dfe-c-fe-features__suggest-copy">
+            <h2 class="govuk-heading-m" id="suggest-heading">Missing something?</h2>
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                Tell DesignOps what would help your team prototype faster. Suggestions go straight to
+                <a class="govuk-link" href="mailto:design.ops@education.gov.uk">design.ops@education.gov.uk</a>
+                by email.
+            </p>
+        </div>
+        <button type="button"
+                class="govuk-button govuk-!-margin-bottom-0"
+                data-open-suggest-feature>
+            Suggest a feature
+        </button>
+    </section>
+</div>
+
+<dialog id="suggest-feature-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="suggest-feature-modal-title"
+        aria-describedby="suggest-feature-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="Suggest" novalidate>
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="suggest-feature-modal-title">Suggest a feature</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="suggest-feature-modal-description">
+                @if (hasModalErrors)
+                {
+                    <div class="govuk-error-summary"
+                         data-module="govuk-error-summary"
+                         tabindex="-1"
+                         role="alert"
+                         aria-labelledby="suggest-feature-error-summary-title">
+                        <h2 class="govuk-error-summary__title" id="suggest-feature-error-summary-title">
+                            There is a problem
+                        </h2>
+                        <div class="govuk-error-summary__body">
+                            <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var error in ViewData.ModelState
+                                          .Where(entry => entry.Key is nameof(Model.Feature)
+                                              or nameof(Model.Problem)
+                                              or "")
+                                          .SelectMany(entry => entry.Value?.Errors ?? Enumerable.Empty<Microsoft.AspNetCore.Mvc.ModelBinding.ModelError>()))
+                            {
+                                <li>@error.ErrorMessage</li>
+                            }
+                            </ul>
+                        </div>
+                    </div>
+                }
+
+                <p class="govuk-body">
+                    What feature would you like to see in this product?
+                </p>
+
+                <div class="govuk-form-group @(featureHasError == true ? "govuk-form-group--error" : null)">
+                    <label class="govuk-label" asp-for="Feature"></label>
+                    @if (featureHasError == true)
+                    {
+                        <p class="govuk-error-message" id="feature-error">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @ViewData.ModelState[nameof(Model.Feature)]!.Errors[0].ErrorMessage
+                        </p>
+                    }
+                    <input class="govuk-input @(featureHasError == true ? "govuk-input--error" : null)"
+                           asp-for="Feature"
+                           aria-describedby="@(featureHasError == true ? "feature-error" : null)" />
+                </div>
+
+                <div class="govuk-form-group @(problemHasError == true ? "govuk-form-group--error" : null)">
+                    <label class="govuk-label" asp-for="Problem"></label>
+                    @if (problemHasError == true)
+                    {
+                        <p class="govuk-error-message" id="problem-error">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @ViewData.ModelState[nameof(Model.Problem)]!.Errors[0].ErrorMessage
+                        </p>
+                    }
+                    <textarea class="govuk-textarea @(problemHasError == true ? "govuk-textarea--error" : null)"
+                              asp-for="Problem"
+                              rows="6"
+                              aria-describedby="@(problemHasError == true ? "problem-error" : null)"></textarea>
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Send suggestion</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var modal = document.getElementById('suggest-feature-modal');
+            if (!modal) {
+                return;
+            }
+
+            document.querySelectorAll('[data-open-suggest-feature]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (typeof modal.showModal === 'function') {
+                        modal.showModal();
+                    }
+                });
+            });
+
+            @if (Model.ShowSuggestModal)
+            {
+                <text>
+                if (typeof modal.showModal === 'function') {
+                    modal.showModal();
+                }
+                var summary = modal.querySelector('.govuk-error-summary');
+                if (summary && typeof summary.focus === 'function') {
+                    summary.focus();
+                }
+                </text>
+            }
+        });
+    </script>
+}

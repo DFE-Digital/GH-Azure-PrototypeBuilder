@@ -31,13 +31,14 @@ internal sealed class GitHubRepositoryValidator(
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
-            if (string.IsNullOrWhiteSpace(GitHubTokenNormalizer.Normalize(_options.PersonalAccessToken)))
+            if (!_options.IsConfigured)
             {
                 throw new ValidationException(
-                    "This GitHub repository could not be found. If it is private, configure a GitHub personal access token with access to the repository.");
+                    "This GitHub repository could not be found. If it is private, configure the GitHub App (or a personal access token) with access to the repository.");
             }
 
-            throw new ValidationException("This GitHub repository could not be found or your GitHub token cannot access it.");
+            throw new ValidationException(
+                "This GitHub repository could not be found or the configured GitHub App/token cannot access it.");
         }
 
         await gitHubApiClient.EnsureSuccessAsync(response, "validate GitHub repository access", cancellationToken);
@@ -47,10 +48,10 @@ internal sealed class GitHubRepositoryValidator(
 
         if (document.RootElement.TryGetProperty("private", out var isPrivate) &&
             isPrivate.GetBoolean() &&
-            string.IsNullOrWhiteSpace(GitHubTokenNormalizer.Normalize(_options.PersonalAccessToken)))
+            !_options.IsConfigured)
         {
             throw new ValidationException(
-                "This is a private GitHub repository. Configure a GitHub personal access token with access to the repository.");
+                "This is a private GitHub repository. Configure the GitHub App (or a personal access token) with access to the repository.");
         }
     }
 

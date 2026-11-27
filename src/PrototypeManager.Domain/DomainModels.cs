@@ -133,9 +133,59 @@ public static partial class SlugGenerator
         return slug[..maxLength].Trim('-');
     }
 
+    public const int AppNameMaxLength = 25;
+
     private static readonly Regex AppNameRegex = AppNamePattern();
 
-    public static void ValidateAppName(string? value, int maxLength = 20)
+    public static string NormaliseAppName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        var previousWasHyphen = false;
+
+        foreach (var character in value.Trim())
+        {
+            char next;
+            if (char.IsWhiteSpace(character) || character is '_' or '.')
+            {
+                next = '-';
+            }
+            else if (char.IsAsciiLetterOrDigit(character) || character == '-')
+            {
+                next = char.ToLowerInvariant(character);
+            }
+            else
+            {
+                continue;
+            }
+
+            if (next == '-')
+            {
+                if (builder.Length == 0 || previousWasHyphen)
+                {
+                    continue;
+                }
+
+                previousWasHyphen = true;
+                builder.Append('-');
+                continue;
+            }
+
+            previousWasHyphen = false;
+            builder.Append(next);
+        }
+
+        var normalised = builder.ToString().Trim('-');
+        return normalised.Length <= AppNameMaxLength
+            ? normalised
+            : normalised[..AppNameMaxLength].Trim('-');
+    }
+
+    public static void ValidateAppName(string? value, int maxLength = AppNameMaxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -151,15 +201,58 @@ public static partial class SlugGenerator
 
         if (!AppNameRegex.IsMatch(appName))
         {
-            throw new ArgumentException("Prototype app name must be lowercase letters, numbers and hyphens only.");
+            throw new ArgumentException(
+                "Prototype app name must start with a letter and use lowercase letters, numbers and hyphens only.");
         }
     }
 
     [GeneratedRegex("-{2,}")]
     private static partial Regex DuplicateHyphenPattern();
 
-    [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$")]
+    [GeneratedRegex("^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")]
     private static partial Regex AppNamePattern();
+}
+
+public static class PrototypeRepositoryNaming
+{
+    public const string Prefix = "prototype-";
+    public const int RandomSuffixLength = 4;
+    public const int GitHubRepositoryNameMaxLength = 100;
+
+    private const string Alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    public static string CreateRepositoryName(string appName, string? randomSuffix = null)
+    {
+        SlugGenerator.ValidateAppName(appName);
+        var suffix = string.IsNullOrWhiteSpace(randomSuffix)
+            ? CreateRandomSuffix()
+            : randomSuffix.Trim().ToLowerInvariant();
+
+        if (suffix.Length != RandomSuffixLength || suffix.Any(character => !char.IsAsciiLetterOrDigit(character)))
+        {
+            throw new ArgumentException("Repository suffix must be 4 alphanumeric characters.");
+        }
+
+        var repositoryName = $"{Prefix}{suffix}-{appName.Trim().ToLowerInvariant()}";
+        if (repositoryName.Length > GitHubRepositoryNameMaxLength)
+        {
+            throw new ArgumentException(
+                $"Repository name must be {GitHubRepositoryNameMaxLength} characters or fewer.");
+        }
+
+        return repositoryName;
+    }
+
+    public static string CreateRandomSuffix()
+    {
+        Span<char> buffer = stackalloc char[RandomSuffixLength];
+        for (var index = 0; index < buffer.Length; index++)
+        {
+            buffer[index] = Alphabet[Random.Shared.Next(Alphabet.Length)];
+        }
+
+        return new string(buffer);
+    }
 }
 
 public static class ProvisioningActivity
@@ -189,6 +282,10 @@ public class ProvisioningJobSecret
 public static class PrototypeResourceNaming
 {
     public const string ResourceNamePrefix = "s186d01-pt-";
+    public const string FreePlanPoolResourceGroupName = $"{ResourceNamePrefix}rg-plans";
+    public const string FreePlanNamePrefix = $"{ResourceNamePrefix}asp-free-";
+    public const int FreeAppsPerPlan = 10;
+    public const int MaxFreePlansPerRegion = 10;
 
     public static string CreateResourceGroupName(string appName) =>
         CreateResourceName(appName, "rg", maxLength: 90);
@@ -196,8 +293,18 @@ public static class PrototypeResourceNaming
     public static string CreateAppServicePlanName(string appName) =>
         CreateResourceName(appName, "asp", maxLength: 60);
 
+    public static string CreateDedicatedEscalationPlanName(string appName) =>
+        CreateResourceName($"{appName}-esc", "asp", maxLength: 60);
+
+    public static string CreateFreePoolPlanName(int index) =>
+        $"{FreePlanNamePrefix}{index:00}";
+
     public static string CreateWebAppName(string appName) =>
         CreateResourceName(appName, "app", maxLength: 60);
+
+    public static bool IsFreePoolPlanName(string planName) =>
+        !string.IsNullOrWhiteSpace(planName) &&
+        planName.StartsWith(FreePlanNamePrefix, StringComparison.OrdinalIgnoreCase);
 
     public static string CreateResourceName(string appName, string resourceType, int maxLength = 60)
     {
@@ -233,6 +340,10 @@ public class Prototype
     public string DeputyOwnerEmail { get; set; } = string.Empty;
     public string GitHubRepositoryUrl { get; set; } = string.Empty;
     public bool RequiresRepositoryScaffold { get; set; }
+    public int? CompassWorkItemId { get; set; }
+    public string CompassWorkItemTitle { get; set; } = string.Empty;
+    public string? CompassProductId { get; set; }
+    public string CompassProductName { get; set; } = string.Empty;
     public string AzureSubscriptionId { get; set; } = string.Empty;
     public string AzureResourceGroupName { get; set; } = string.Empty;
     public string AzureAppServicePlanName { get; set; } = string.Empty;
@@ -248,6 +359,10 @@ public class Prototype
     public string Reason { get; set; } = string.Empty;
     public string Region { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
+    /// <summary>SKU to restore when a temporary escalation ends (usually F1).</summary>
+    public string BaselineSku { get; set; } = string.Empty;
+    /// <summary>When set, the current higher SKU reverts to BaselineSku at this time.</summary>
+    public DateTimeOffset? TemporarySkuUntil { get; set; }
     public bool ExceptionRequired { get; set; }
 
     public BusinessArea? BusinessArea { get; set; }
@@ -362,4 +477,22 @@ public class ExceptionRequest
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Prototype? Prototype { get; set; }
+}
+
+/// <summary>
+/// Tracks GitHub repositories created by Prototype Manager so admins can clean up
+/// orphans manually after a prototype entry is removed (GitHub is never auto-deleted).
+/// </summary>
+public class TrackedGitHubRepository
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? PrototypeId { get; set; }
+    public string RepositoryUrl { get; set; } = string.Empty;
+    public string Owner { get; set; } = string.Empty;
+    public string RepositoryName { get; set; } = string.Empty;
+    public string PrototypeName { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ClearedAt { get; set; }
+    public string? ClearedBy { get; set; }
 }

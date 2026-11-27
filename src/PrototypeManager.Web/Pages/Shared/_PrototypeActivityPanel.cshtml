@@ -3,20 +3,57 @@
 
 <section class="dfe-c-fe-panel">
     <div class="dfe-c-fe-panel__header">
-        <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Recent activity</h2>
+        <h2 class="dfe-c-fe-heading govuk-!-margin-bottom-0">Activity</h2>
         <p class="dfe-c-fe-text govuk-!-margin-top-2 govuk-!-margin-bottom-0">
             Setup, deployment, configuration, and management events for this prototype.
         </p>
     </div>
 
+    @if (Model.ActivityItems.Any())
+    {
+        <div class="dfe-c-fe-toolbar govuk-!-margin-bottom-4">
+            <div class="dfe-c-fe-toolbar__filters">
+                <div class="dfe-c-fe-filter-chips" role="group" aria-label="Filter by activity type">
+                @foreach (var option in PrototypeActivityTypes.Options)
+                {
+                    var count = Model.ActivityTypeCount(option.Key);
+                    var isActive = string.Equals(Model.ActiveActivityType, option.Key, StringComparison.OrdinalIgnoreCase);
+                    <a class="dfe-c-fe-filter-chip @(isActive ? "dfe-c-fe-filter-chip--active" : null)"
+                       href="@Model.ActivityUrl(option.Key, 1)"
+                       aria-current="@(isActive ? "page" : null)">
+                        @option.Label <span class="dfe-c-fe-filter-chip__count">@count</span>
+                    </a>
+                }
+                </div>
+            </div>
+        </div>
+    }
+
     @if (!Model.ActivityItems.Any())
     {
         <p class="dfe-c-fe-text govuk-!-margin-bottom-0">No activity has been recorded yet.</p>
     }
+    else if (!Model.PagedActivityItems.Any())
+    {
+        <p class="dfe-c-fe-text govuk-!-margin-bottom-0">No activity matches this filter.</p>
+        <p class="govuk-!-margin-bottom-0">
+            <a class="govuk-link" href="@Model.ActivityUrl(PrototypeActivityTypes.All, 1)">Show all activity</a>
+        </p>
+    }
     else
     {
-        <ol class="activity-feed govuk-!-margin-bottom-0">
-            @foreach (var item in Model.ActivityItems)
+        <p class="dfe-c-fe-text govuk-!-margin-bottom-3" aria-live="polite">
+            Showing
+            @(((Model.CurrentActivityPage - 1) * DetailsModel.ActivityPageSize) + 1)
+            to
+            @Math.Min(Model.CurrentActivityPage * DetailsModel.ActivityPageSize, Model.ActivityTotalCount)
+            of
+            @Model.ActivityTotalCount
+            @(Model.ActiveActivityType == PrototypeActivityTypes.All ? "events" : "matching events").
+        </p>
+
+        <ol class="activity-feed @(Model.ActivityTotalPages > 1 ? null : "govuk-!-margin-bottom-0")">
+            @foreach (var item in Model.PagedActivityItems)
             {
                 <li class="activity-feed__item @DetailsModel.GetActivityItemClass(item.Status)">
                     <div class="activity-feed__marker" aria-hidden="true"></div>
@@ -59,6 +96,54 @@
                 </li>
             }
         </ol>
+
+        @if (Model.ActivityTotalPages > 1)
+        {
+            <nav class="govuk-pagination govuk-!-margin-top-6 govuk-!-margin-bottom-0" role="navigation" aria-label="Activity pagination">
+                @if (Model.HasPreviousActivityPage)
+                {
+                    <div class="govuk-pagination__prev">
+                        <a class="govuk-link govuk-pagination__link"
+                           href="@Model.ActivityUrl(Model.ActiveActivityType, Model.CurrentActivityPage - 1)"
+                           rel="prev">
+                            <svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                                <path d="m6.55 12.5-1.4-1.41 4.02-4.09H0V5.5h9.17L5.15 1.41 6.55 0l6.95 6.95-6.95 5.55z"></path>
+                            </svg>
+                            <span class="govuk-pagination__link-title">Previous</span>
+                        </a>
+                    </div>
+                }
+
+                <ul class="govuk-pagination__list">
+                @for (var pageNumber = 1; pageNumber <= Model.ActivityTotalPages; pageNumber++)
+                {
+                    var isCurrent = pageNumber == Model.CurrentActivityPage;
+                    <li class="govuk-pagination__item @(isCurrent ? "govuk-pagination__item--current" : null)">
+                        <a class="govuk-link govuk-pagination__link"
+                           href="@Model.ActivityUrl(Model.ActiveActivityType, pageNumber)"
+                           aria-label="Page @pageNumber"
+                           aria-current="@(isCurrent ? "page" : null)">
+                            @pageNumber
+                        </a>
+                    </li>
+                }
+                </ul>
+
+                @if (Model.HasNextActivityPage)
+                {
+                    <div class="govuk-pagination__next">
+                        <a class="govuk-link govuk-pagination__link"
+                           href="@Model.ActivityUrl(Model.ActiveActivityType, Model.CurrentActivityPage + 1)"
+                           rel="next">
+                            <span class="govuk-pagination__link-title">Next</span>
+                            <svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                                <path d="m8.45.5 1.4 1.41L5.83 6H15v1.5H5.83l4.02 4.09-1.4 1.41L1.5 6.95 8.45.5z"></path>
+                            </svg>
+                        </a>
+                    </div>
+                }
+            </nav>
+        }
     }
 </section>
 
@@ -71,7 +156,7 @@
         <header class="dfe-f-modal__header">
             <h2 class="govuk-heading-m dfe-f-modal__title" id="activity-log-modal-title">Activity details</h2>
             <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
-                <span class="dfe-f-modal__close-x" aria-hidden="true">×</span>
+                <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
             </button>
         </header>
         <div class="dfe-f-modal__body" id="activity-log-modal-description">

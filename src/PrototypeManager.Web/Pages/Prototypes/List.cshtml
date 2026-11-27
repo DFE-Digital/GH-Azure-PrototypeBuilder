@@ -1,7 +1,54 @@
 @page
 @model PrototypeManager.Web.Pages.Prototypes.ListModel
 @{
-    ViewData["Title"] = "Prototypes";
+    ViewData["Title"] = Model.PageHeading;
+}
+
+@section SideNav {
+    <nav class="app-side-nav__panel" aria-label="Prototype filters">
+        <ul class="app-side-nav__list">
+            <li class="app-side-nav__item @(Model.ActiveScope == ListModel.ScopeMine ? "app-side-nav__item--active" : null)">
+                <a class="app-side-nav__link"
+                   asp-page="/Prototypes/List"
+                   asp-route-scope="@ListModel.ScopeMine">
+                    <span class="app-side-nav__label">Your prototypes</span>
+                    <span class="app-side-nav__count">@Model.YourPrototypeCount</span>
+                </a>
+            </li>
+            <li class="app-side-nav__item @(Model.ActiveScope == ListModel.ScopeAll ? "app-side-nav__item--active" : null)">
+                <a class="app-side-nav__link"
+                   asp-page="/Prototypes/List"
+                   asp-route-scope="@ListModel.ScopeAll">
+                    <span class="app-side-nav__label">All prototypes</span>
+                    <span class="app-side-nav__count">@Model.AllPrototypeCount</span>
+                </a>
+            </li>
+        </ul>
+
+        <p class="app-side-nav__heading">Teams</p>
+        @if (Model.Teams.Any())
+        {
+            <ul class="app-side-nav__list">
+            @foreach (var team in Model.Teams)
+            {
+                var isActive = Model.ActiveScope == ListModel.ScopeTeam && Model.ActiveTeamId == team.Id;
+                <li class="app-side-nav__item @(isActive ? "app-side-nav__item--active" : null)">
+                    <a class="app-side-nav__link"
+                       asp-page="/Prototypes/List"
+                       asp-route-scope="@ListModel.ScopeTeam"
+                       asp-route-team="@team.Id">
+                        <span class="app-side-nav__label">@team.Name</span>
+                        <span class="app-side-nav__count">@team.Count</span>
+                    </a>
+                </li>
+            }
+            </ul>
+        }
+        else
+        {
+            <p class="app-side-nav__empty">No teams yet.</p>
+        }
+    </nav>
 }
 
 @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -15,40 +62,15 @@
 <div class="dfe-c-fe-shell">
     <header class="dfe-c-fe-page-header">
         <div class="dfe-c-fe-page-header__intro">
-            <p class="dfe-c-fe-eyebrow">Prototype hosting</p>
-            <h1 class="dfe-c-fe-title">Prototypes</h1>
-            <ul class="dfe-c-fe-stat-list" id="prototype-list-summary" aria-label="Prototype counts">
-                <li class="dfe-c-fe-stat-list__item">
-                    <span class="dfe-c-fe-stat-list__value">@Model.Prototypes.Count</span>
-                    <span class="dfe-c-fe-stat-list__label">total</span>
-                </li>
-                <li class="dfe-c-fe-stat-list__item">
-                    <span class="dfe-c-fe-badge dfe-c-fe-badge--success">@Model.LiveCount live</span>
-                </li>
-                @if (Model.ActiveJobCount > 0)
-                {
-                    <li class="dfe-c-fe-stat-list__item">
-                        <span class="dfe-c-fe-badge dfe-c-fe-badge--info">@Model.ActiveJobCount in progress</span>
-                    </li>
-                }
-                @if (Model.FailedCount > 0)
-                {
-                    <li class="dfe-c-fe-stat-list__item">
-                        <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">@Model.FailedCount failed</span>
-                    </li>
-                }
-                @if (Model.ArchivedCount > 0)
-                {
-                    <li class="dfe-c-fe-stat-list__item">
-                        <span class="dfe-c-fe-badge dfe-c-fe-badge--muted">@Model.ArchivedCount archived</span>
-                    </li>
-                }
-            </ul>
+            <h1 class="dfe-c-fe-title">@Model.PageHeading</h1>
         </div>
-        <div class="dfe-c-fe-page-header__actions">
-            <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
-            <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host prototype</a>
-        </div>
+        @if (Model.YourPrototypeCount > 0)
+        {
+            <div class="dfe-c-fe-page-header__actions">
+                <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host an existing prototype</a>
+            </div>
+        }
     </header>
 
     @if (Model.Prototypes.Any())
@@ -56,11 +78,19 @@
         <div class="dfe-c-fe-toolbar" aria-label="Filter prototypes">
             <div class="dfe-c-fe-toolbar__search-wrap">
                 <label class="govuk-label govuk-visually-hidden" for="prototype-list-search">Search prototypes</label>
-                <input class="govuk-input dfe-c-fe-toolbar__search"
-                       id="prototype-list-search"
-                       type="search"
-                       autocomplete="off"
-                       spellcheck="false" />
+                <div class="dfe-c-fe-search">
+                    <input class="govuk-input dfe-c-fe-search__input"
+                           id="prototype-list-search"
+                           type="search"
+                           placeholder="Search prototypes"
+                           autocomplete="off"
+                           spellcheck="false" />
+                    <span class="dfe-c-fe-search__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" focusable="false">
+                            <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14Z"/>
+                        </svg>
+                    </span>
+                </div>
             </div>
             <div class="dfe-c-fe-toolbar__filters">
                 <div class="dfe-c-fe-filter-chips" role="group" aria-label="Filter by status">
@@ -68,41 +98,32 @@
                             class="dfe-c-fe-filter-chip dfe-c-fe-filter-chip--active"
                             data-status-filter="all"
                             aria-pressed="true">
-                        All <span class="dfe-c-fe-filter-chip__count">@Model.Prototypes.Count</span>
+                        All <span class="dfe-c-fe-filter-chip__count" data-filter-count="all">@Model.Prototypes.Count</span>
                     </button>
                     <button type="button"
                             class="dfe-c-fe-filter-chip"
                             data-status-filter="live"
                             aria-pressed="false">
-                        Live <span class="dfe-c-fe-filter-chip__count">@Model.LiveCount</span>
+                        Live <span class="dfe-c-fe-filter-chip__count" data-filter-count="live">@Model.LiveCount</span>
                     </button>
-                    @if (Model.ActiveJobCount > 0)
-                    {
-                        <button type="button"
-                                class="dfe-c-fe-filter-chip"
-                                data-status-filter="active"
-                                aria-pressed="false">
-                            In progress <span class="dfe-c-fe-filter-chip__count">@Model.ActiveJobCount</span>
-                        </button>
-                    }
-                    @if (Model.FailedCount > 0)
-                    {
-                        <button type="button"
-                                class="dfe-c-fe-filter-chip"
-                                data-status-filter="failed"
-                                aria-pressed="false">
-                            Failed <span class="dfe-c-fe-filter-chip__count">@Model.FailedCount</span>
-                        </button>
-                    }
-                    @if (Model.ArchivedCount > 0)
-                    {
-                        <button type="button"
-                                class="dfe-c-fe-filter-chip"
-                                data-status-filter="archived"
-                                aria-pressed="false">
-                            Archived <span class="dfe-c-fe-filter-chip__count">@Model.ArchivedCount</span>
-                        </button>
-                    }
+                    <button type="button"
+                            class="dfe-c-fe-filter-chip"
+                            data-status-filter="active"
+                            aria-pressed="false">
+                        In progress <span class="dfe-c-fe-filter-chip__count" data-filter-count="active">@Model.ActiveJobCount</span>
+                    </button>
+                    <button type="button"
+                            class="dfe-c-fe-filter-chip"
+                            data-status-filter="failed"
+                            aria-pressed="false">
+                        Failed <span class="dfe-c-fe-filter-chip__count" data-filter-count="failed">@Model.FailedCount</span>
+                    </button>
+                    <button type="button"
+                            class="dfe-c-fe-filter-chip"
+                            data-status-filter="archived"
+                            aria-pressed="false">
+                        Archived <span class="dfe-c-fe-filter-chip__count" data-filter-count="archived">@Model.ArchivedCount</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -111,38 +132,66 @@
             Showing @Model.Prototypes.Count prototype@(Model.Prototypes.Count == 1 ? string.Empty : "s")
         </p>
 
-        <ul class="dfe-c-fe-app-list" id="prototype-app-list">
+        <ul class="dfe-c-fe-app-list"
+            id="prototype-app-list"
+            data-snapshot-url="@Url.Page("/Prototypes/List", "Snapshot", new { scope = Model.ActiveScope, team = Model.ActiveTeamId })"
+            data-has-active-jobs="@Model.ActiveJobCount.ToString().ToLowerInvariant()"
+            data-poll-interval-ms="3000">
         @foreach (var prototype in Model.Prototypes)
         {
             var statusFilter = ListModel.GetStatusFilter(prototype.Status);
             var appRuntime = Model.GetAppRuntime(prototype);
-            <li class="dfe-c-fe-app-row"
+            <li class="dfe-c-fe-app-row dfe-c-fe-app-row--list"
+                data-prototype-id="@prototype.Id"
                 data-status="@statusFilter"
                 data-search="@ListModel.GetSearchText(prototype, appRuntime)">
-                <a class="dfe-c-fe-app-row__link"
-                   asp-page="/Prototypes/Details"
-                   asp-route-id="@prototype.Id">
+                <div class="dfe-c-fe-app-row__name-col">
                     <span class="dfe-c-fe-app-row__icon" aria-hidden="true">@prototype.Name[..1].ToUpperInvariant()</span>
                     <span class="dfe-c-fe-app-row__content">
                         <span class="dfe-c-fe-app-row__name">@prototype.Name</span>
                         <span class="dfe-c-fe-app-row__meta">
-                            @(prototype.BusinessArea?.Name ?? "No business area") · @prototype.OwnerEmail
+                            @(prototype.BusinessArea?.Name ?? "No business area")
+                            @{
+                                var repositoryName = PrototypeGitHubRepositoryUrls.TryGetRepositoryName(prototype.GitHubRepositoryUrl);
+                                var repositoryUrl = PrototypeGitHubRepositoryUrls.Normalize(prototype.GitHubRepositoryUrl);
+                            }
+                            @if (!string.IsNullOrWhiteSpace(repositoryName) && !string.IsNullOrWhiteSpace(repositoryUrl))
+                            {
+                                <span class="dfe-c-fe-app-row__meta-sep" aria-hidden="true"> · </span>
+                                <a class="govuk-link" href="@repositoryUrl" target="_blank" rel="noopener noreferrer">@repositoryName</a>
+                            }
                         </span>
                     </span>
-                    <span class="dfe-c-fe-app-row__aside">
-                        <span class="@ListModel.GetRowBadgeClass(prototype, appRuntime)">@ListModel.GetRowBadgeLabel(prototype, appRuntime)</span>
-                        <span class="dfe-c-fe-app-row__stack">@prototype.Sku · @(string.IsNullOrWhiteSpace(prototype.Region) ? "westeurope" : prototype.Region)</span>
-                    </span>
-                </a>
-                @if (!string.IsNullOrWhiteSpace(prototype.PrototypeUrl))
-                {
-                    <a class="govuk-button dfe-c-fe-app-row__open"
-                       href="@prototype.PrototypeUrl"
-                       target="_blank"
-                       rel="noopener noreferrer">
-                        Open<span class="govuk-visually-hidden"> @prototype.Name</span>
+                </div>
+                <div class="dfe-c-fe-app-row__status">
+                    <span class="@ListModel.GetRowBadgeClass(prototype, appRuntime)">@ListModel.GetRowBadgeLabel(prototype, appRuntime)</span>
+                </div>
+                <div class="dfe-c-fe-app-row__manage">
+                    <a class="govuk-button govuk-button--secondary dfe-c-fe-app-row__action"
+                       asp-page="/Prototypes/Details"
+                       asp-route-id="@prototype.Id">
+                        Manage<span class="govuk-visually-hidden"> @prototype.Name</span>
                     </a>
-                }
+                </div>
+                <div class="dfe-c-fe-app-row__open-col">
+                    @if (!string.IsNullOrWhiteSpace(prototype.PrototypeUrl))
+                    {
+                        <a class="govuk-button dfe-c-fe-app-row__action"
+                           asp-page="/Prototypes/Open"
+                           asp-route-id="@prototype.Id">
+                            Open<span class="govuk-visually-hidden"> @prototype.Name</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="govuk-button dfe-c-fe-app-row__action"
+                                disabled
+                                aria-disabled="true">
+                            Open<span class="govuk-visually-hidden"> @prototype.Name (not available yet)</span>
+                        </button>
+                    }
+                </div>
             </li>
         }
         </ul>
@@ -155,12 +204,31 @@
     else
     {
         <div class="dfe-c-fe-empty dfe-c-fe-empty--panel">
-            <h2 class="dfe-c-fe-heading">No prototypes yet</h2>
-            <p class="dfe-c-fe-text">Create a prototype with the GOV.UK Prototype Kit, or host an existing GitHub repository in Azure.</p>
-            <div class="dfe-c-fe-actions">
-                <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
-                <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host prototype</a>
-            </div>
+            @if (Model.ActiveScope == ListModel.ScopeMine)
+            {
+                <h2 class="dfe-c-fe-heading">You have no active prototypes</h2>
+                <p class="dfe-c-fe-text">You’re not listed as owner, deputy, or contact on any prototype yet. Browse all prototypes, or create one.</p>
+                <div class="dfe-c-fe-actions">
+                    <a class="govuk-button govuk-button--secondary"
+                       asp-page="/Prototypes/List"
+                       asp-route-scope="@ListModel.ScopeAll">All prototypes</a>
+                    <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                </div>
+            }
+            else if (Model.ActiveScope == ListModel.ScopeTeam)
+            {
+                <h2 class="dfe-c-fe-heading">No prototypes for this team</h2>
+                <p class="dfe-c-fe-text">There are no prototypes in this team that you can see.</p>
+            }
+            else
+            {
+                <h2 class="dfe-c-fe-heading">No prototypes yet</h2>
+                <p class="dfe-c-fe-text">Create a prototype with the GOV.UK Prototype Kit, or host an existing GitHub repository in Azure.</p>
+                <div class="dfe-c-fe-actions">
+                    <a class="govuk-button" href="@Url.Page("/Prototypes/Create")">Create a prototype</a>
+                    <a class="govuk-button govuk-button--secondary" href="@Url.Page("/Prototypes/New")">Host an existing prototype</a>
+                </div>
+            }
         </div>
     }
 </div>

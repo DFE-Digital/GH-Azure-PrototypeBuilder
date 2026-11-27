@@ -1,0 +1,38 @@
+@{
+    var path = Context.Request.Path.Value ?? string.Empty;
+    var createActive = path.StartsWith("/Prototypes/Create", StringComparison.OrdinalIgnoreCase);
+    var hostActive = path.StartsWith("/Prototypes/New", StringComparison.OrdinalIgnoreCase);
+}
+
+<nav class="app-side-nav__panel" aria-label="Add a prototype">
+    <p class="app-side-nav__heading">Add a prototype</p>
+    <ul class="app-side-nav__list">
+        <li class="app-side-nav__item @(createActive ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link"
+               asp-page="/Prototypes/Create"
+               aria-current="@(createActive ? "page" : null)">
+                <span class="app-side-nav__label">Create a prototype</span>
+            </a>
+        </li>
+        <li class="app-side-nav__item @(hostActive ? "app-side-nav__item--active" : null)">
+            <a class="app-side-nav__link"
+               asp-page="/Prototypes/New"
+               aria-current="@(hostActive ? "page" : null)">
+                <span class="app-side-nav__label">Host an existing prototype</span>
+            </a>
+        </li>
+    </ul>
+    <p class="app-side-nav__heading">Help</p>
+    <ul class="app-side-nav__list">
+        <li class="app-side-nav__item">
+            <a class="app-side-nav__link" asp-page="/GettingStarted">
+                <span class="app-side-nav__label">Getting started</span>
+            </a>
+        </li>
+        <li class="app-side-nav__item">
+            <a class="app-side-nav__link" asp-page="/Features">
+                <span class="app-side-nav__label">Features</span>
+            </a>
+        </li>
+    </ul>
+</nav>

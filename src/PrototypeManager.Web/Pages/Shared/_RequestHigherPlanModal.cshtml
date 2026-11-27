@@ -1,0 +1,146 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+@{
+    var requestedSkuHasError = ViewData.ModelState[nameof(Model.RequestedSku)]?.Errors.Count > 0;
+    var exceptionReasonHasError = ViewData.ModelState[nameof(Model.ExceptionReason)]?.Errors.Count > 0;
+    var hasModalErrors = !ViewData.ModelState.IsValid && Model.ShowRequestHigherPlanModal;
+}
+
+<dialog id="request-higher-plan-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="request-higher-plan-modal-title"
+        aria-describedby="request-higher-plan-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="RequestHigherPlan" asp-route-id="@Model.Prototype!.Id" novalidate>
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="request-higher-plan-modal-title">Request higher plan</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="request-higher-plan-modal-description">
+                @if (hasModalErrors)
+                {
+                    <div class="govuk-error-summary"
+                         data-module="govuk-error-summary"
+                         tabindex="-1"
+                         role="alert"
+                         aria-labelledby="request-higher-plan-error-summary-title">
+                        <h2 class="govuk-error-summary__title" id="request-higher-plan-error-summary-title">
+                            There is a problem
+                        </h2>
+                        <div class="govuk-error-summary__body">
+                            <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var error in ViewData.ModelState
+                                          .Where(entry => entry.Key is nameof(Model.RequestedSku)
+                                              or nameof(Model.ExceptionReason)
+                                              or "")
+                                          .SelectMany(entry => entry.Value?.Errors ?? Enumerable.Empty<Microsoft.AspNetCore.Mvc.ModelBinding.ModelError>()))
+                            {
+                                <li>@error.ErrorMessage</li>
+                            }
+                            </ul>
+                        </div>
+                    </div>
+                }
+
+                <p class="govuk-body">
+                    Prototypes default to the Azure Free plan (F1). Ask DesignOps for a higher plan only when you have a legitimate need that the free plan cannot support.
+                </p>
+
+                <details class="govuk-details govuk-!-margin-bottom-4">
+                    <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">Free plan limits and available plans</span>
+                    </summary>
+                    <div class="govuk-details__text">
+                        <p class="govuk-body">The Free (F1) plan is suitable for light design and development work. It has important limits:</p>
+                        <ul class="govuk-list govuk-list--bullet">
+                            <li>Shared compute with limited CPU minutes per day</li>
+                            <li>1 GB storage and constrained memory</li>
+                            <li>No custom domains or Always On</li>
+                            <li>Can become slow or unavailable under concurrent research sessions</li>
+                        </ul>
+                        <p class="govuk-body">Higher plans you can request:</p>
+                        <ul class="govuk-list govuk-list--bullet">
+                        @foreach (var plan in PrototypeHostingPlans.HigherPlans)
+                        {
+                            <li><strong>@plan.Name (@plan.Sku)</strong> — @plan.Summary</li>
+                        }
+                        </ul>
+                        <p class="govuk-body govuk-!-margin-bottom-0">
+                            Legitimate exception examples include significant user research activity, stakeholder showcases with many concurrent participants, or sustained workshops that may exceed free-plan limits. Convenience or preference alone is not enough.
+                        </p>
+                    </div>
+                </details>
+
+                <div class="govuk-form-group @(requestedSkuHasError == true ? "govuk-form-group--error" : null)">
+                    <fieldset class="govuk-fieldset" aria-describedby="@(requestedSkuHasError == true ? "requested-sku-error" : null)">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Plan to request</legend>
+                        @if (requestedSkuHasError == true)
+                        {
+                            <p class="govuk-error-message" id="requested-sku-error">
+                                <span class="govuk-visually-hidden">Error:</span>
+                                @ViewData.ModelState[nameof(Model.RequestedSku)]!.Errors.First().ErrorMessage
+                            </p>
+                        }
+                        <div class="govuk-radios" data-module="govuk-radios">
+                        @{
+                            var selectedSku = Model.RequestedSku ?? Model.AvailableHigherPlans.FirstOrDefault()?.Sku;
+                        }
+                        @foreach (var plan in Model.AvailableHigherPlans)
+                        {
+                            var isSelected = string.Equals(selectedSku, plan.Sku, StringComparison.OrdinalIgnoreCase);
+                            <div class="govuk-radios__item">
+                                @if (isSelected)
+                                {
+                                    <input class="govuk-radios__input"
+                                           id="requested-sku-@plan.Sku"
+                                           name="RequestedSku"
+                                           type="radio"
+                                           value="@plan.Sku"
+                                           checked>
+                                }
+                                else
+                                {
+                                    <input class="govuk-radios__input"
+                                           id="requested-sku-@plan.Sku"
+                                           name="RequestedSku"
+                                           type="radio"
+                                           value="@plan.Sku">
+                                }
+                                <label class="govuk-label govuk-radios__label" for="requested-sku-@plan.Sku">
+                                    @plan.Name (@plan.Sku)
+                                </label>
+                                <div class="govuk-hint govuk-radios__hint">@plan.Summary</div>
+                            </div>
+                        }
+                        </div>
+                    </fieldset>
+                </div>
+
+                <div class="govuk-form-group @(exceptionReasonHasError == true ? "govuk-form-group--error" : null)">
+                    <label class="govuk-label" for="exceptionReason">Why do you need a higher plan?</label>
+                    <div id="exception-reason-hint" class="govuk-hint">
+                        Describe the legitimate activity that may exceed free-plan limits — for example a significant amount of user research with concurrent participants. Minimum 40 characters.
+                    </div>
+                    @if (exceptionReasonHasError == true)
+                    {
+                        <p class="govuk-error-message" id="exception-reason-error">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @ViewData.ModelState[nameof(Model.ExceptionReason)]!.Errors.First().ErrorMessage
+                        </p>
+                    }
+                    <textarea class="govuk-textarea @(exceptionReasonHasError == true ? "govuk-textarea--error" : null)"
+                              id="exceptionReason"
+                              name="ExceptionReason"
+                              rows="5"
+                              aria-describedby="exception-reason-hint@(exceptionReasonHasError == true ? " exception-reason-error" : null)">@Model.ExceptionReason</textarea>
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Submit request</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

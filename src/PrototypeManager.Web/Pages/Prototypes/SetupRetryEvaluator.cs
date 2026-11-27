@@ -9,7 +9,8 @@ public static class SetupRetryEvaluator
         bool CanRetryProvisioning,
         bool CanRetryScaffold,
         bool CanRetryGitHubDeployment,
-        string? BlockedReason);
+        string? BlockedReason,
+        string? FailedTaskId);
 
     public static RetryOptions Evaluate(
         Prototype prototype,
@@ -20,7 +21,7 @@ public static class SetupRetryEvaluator
     {
         if (!progress.IsFailed || !canManage)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
         }
 
         var failedTaskId = progress.Tasks
@@ -29,69 +30,97 @@ public static class SetupRetryEvaluator
 
         if (failedTaskId is null)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
         }
 
         if (IsScaffoldFailure(failedTaskId))
         {
-            return EvaluateScaffoldRetry(prototype, jobs);
+            return EvaluateScaffoldRetry(prototype, jobs, failedTaskId);
         }
 
         if (IsHostingFailure(failedTaskId))
         {
-            return EvaluateHostingRetry(prototype, jobs);
+            return EvaluateHostingRetry(prototype, jobs, failedTaskId);
         }
 
         if (IsGitHubFailure(failedTaskId))
         {
-            return EvaluateGitHubRetry(prototype, jobs, gitHubTokenConfigured, progress);
+            return EvaluateGitHubRetry(prototype, jobs, gitHubTokenConfigured, progress, failedTaskId);
         }
 
-        return new RetryOptions(false, false, false, null);
+        return None();
     }
 
-    private static RetryOptions EvaluateScaffoldRetry(Prototype prototype, IReadOnlyList<ProvisioningJob> jobs)
+    public static string GetRetryButtonLabel(string? failedTaskId) => failedTaskId switch
+    {
+        ProvisioningTasks.GitHubCreateRepository => "Retry creating GitHub repository",
+        ProvisioningTasks.GitHubScaffoldKit => "Retry adding Prototype Kit code",
+        ProvisioningTasks.Queued => "Retry queuing prototype",
+        ProvisioningTasks.AzureResources => "Retry creating Azure hosting",
+        ProvisioningTasks.GitHubConfigure => "Retry configuring GitHub deployment",
+        ProvisioningTasks.GitHubDeploy => "Retry deploying from GitHub",
+        ProvisioningTasks.SiteVerify => "Retry testing your app",
+        _ => "Retry this step"
+    };
+
+    private static RetryOptions None() => new(false, false, false, null, null);
+
+    private static RetryOptions EvaluateScaffoldRetry(
+        Prototype prototype,
+        IReadOnlyList<ProvisioningJob> jobs,
+        string failedTaskId)
     {
         if (prototype.Status is PrototypeStatus.Deleted or PrototypeStatus.Archived or PrototypeStatus.Deleting)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
         }
 
         if (jobs.Any(job =>
                 job.Type == ProvisioningJobType.ScaffoldGitHubRepository &&
                 job.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running))
         {
-            return new RetryOptions(false, false, false, "GitHub repository setup is already retrying.");
+            return Blocked("GitHub repository setup is already retrying.", failedTaskId);
         }
 
         var scaffoldAttempts = jobs.Count(job => job.Type == ProvisioningJobType.ScaffoldGitHubRepository);
 
         if (scaffoldAttempts >= 3)
         {
-            return new RetryOptions(
-                false,
-                false,
-                false,
-                "This prototype has reached the maximum number of GitHub setup attempts. Delete it and create a new one.");
+            return Blocked(
+                HasLiveHosting(prototype)
+                    ? "This prototype has reached the maximum number of GitHub setup attempts. Manage the existing hosting, or contact support."
+                    : "This prototype has reached the maximum number of GitHub setup attempts. Delete it and create a new one.",
+                failedTaskId);
         }
 
-        return new RetryOptions(false, true, false, null);
+        return new RetryOptions(false, true, false, null, failedTaskId);
     }
 
-    private static RetryOptions EvaluateHostingRetry(Prototype prototype, IReadOnlyList<ProvisioningJob> jobs)
+    private static RetryOptions EvaluateHostingRetry(
+        Prototype prototype,
+        IReadOnlyList<ProvisioningJob> jobs,
+        string failedTaskId)
     {
         if (prototype.Status is PrototypeStatus.Deleted or PrototypeStatus.Archived or PrototypeStatus.Deleting)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
+        }
+
+        if (HasLiveHosting(prototype))
+        {
+            return Blocked(
+                "Azure hosting is already available. Open Manage prototype - you do not need to delete and recreate it.",
+                failedTaskId);
         }
 
         if (jobs.Any(job =>
                 job.Type is ProvisioningJobType.Create or ProvisioningJobType.Retry &&
                 job.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running))
         {
-            return new RetryOptions(false, false, false, "Setup is already retrying.");
+            return Blocked("Setup is already retrying.", failedTaskId);
         }
 
+        // Order in memory - SQLite cannot ORDER BY DateTimeOffset.
         var latestCreateOrRetry = jobs
             .Where(job => job.Type is ProvisioningJobType.Create or ProvisioningJobType.Retry)
             .OrderByDescending(job => job.CreatedAt)
@@ -99,7 +128,7 @@ public static class SetupRetryEvaluator
 
         if (latestCreateOrRetry?.Status != ProvisioningJobStatus.Failed)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
         }
 
         var provisioningAttempts = jobs.Count(job =>
@@ -107,30 +136,33 @@ public static class SetupRetryEvaluator
 
         if (provisioningAttempts >= 3)
         {
-            return new RetryOptions(
-                false,
-                false,
-                false,
-                "This prototype has reached the maximum number of setup attempts. Delete it and create a new one, or contact support.");
+            return Blocked(
+                "This prototype has reached the maximum number of setup attempts. Delete it and create a new one, or contact support.",
+                failedTaskId);
         }
 
         if (string.IsNullOrWhiteSpace(latestCreateOrRetry.SecretReference))
         {
-            return new RetryOptions(
-                false,
-                false,
-                false,
-                "Setup cannot be retried because the original prototype password is no longer available.");
+            return Blocked(
+                "Setup cannot be retried because the original prototype password is no longer available.",
+                failedTaskId);
         }
 
-        return new RetryOptions(true, false, false, null);
+        return new RetryOptions(true, false, false, null, failedTaskId);
     }
+
+    private static bool HasLiveHosting(Prototype prototype) =>
+        prototype.Status == PrototypeStatus.Live
+        || (!string.IsNullOrWhiteSpace(prototype.PrototypeUrl)
+            && prototype.PrototypeUrl.Contains("azurewebsites.net", StringComparison.OrdinalIgnoreCase))
+        || !string.IsNullOrWhiteSpace(prototype.AzureWebAppName);
 
     private static RetryOptions EvaluateGitHubRetry(
         Prototype prototype,
         IReadOnlyList<ProvisioningJob> jobs,
         bool gitHubTokenConfigured,
-        ProvisioningProgressSnapshot progress)
+        ProvisioningProgressSnapshot progress,
+        string failedTaskId)
     {
         if (prototype.RequiresRepositoryScaffold &&
             progress.Tasks.Any(task =>
@@ -138,42 +170,41 @@ public static class SetupRetryEvaluator
                  string.Equals(task.Id, ProvisioningTasks.GitHubScaffoldKit, StringComparison.Ordinal)) &&
                 !string.Equals(task.Status, ProvisioningTaskState.Completed.ToString(), StringComparison.Ordinal)))
         {
-            return EvaluateScaffoldRetry(prototype, jobs);
+            return EvaluateScaffoldRetry(prototype, jobs, failedTaskId);
         }
 
         if (prototype.Status != PrototypeStatus.Live)
         {
-            return new RetryOptions(false, false, false, null);
+            return None();
         }
 
         if (string.IsNullOrWhiteSpace(prototype.AzureWebAppName) ||
             string.IsNullOrWhiteSpace(prototype.AzureResourceGroupName))
         {
-            return new RetryOptions(
-                false,
-                false,
-                false,
-                "Azure hosting must be ready before GitHub deployment can be retried.");
+            return Blocked(
+                "Azure hosting must be ready before GitHub deployment can be retried.",
+                failedTaskId);
         }
 
         if (!gitHubTokenConfigured)
         {
-            return new RetryOptions(
-                false,
-                false,
-                false,
-                "GitHub deployment cannot be retried until a GitHub access token is configured.");
+            return Blocked(
+                "GitHub deployment cannot be retried until the GitHub App credentials are configured.",
+                failedTaskId);
         }
 
         if (jobs.Any(job =>
                 job.Type == ProvisioningJobType.ConfigureGitHubDeployment &&
                 job.Status is ProvisioningJobStatus.Queued or ProvisioningJobStatus.Running))
         {
-            return new RetryOptions(false, false, false, "GitHub deployment is already retrying.");
+            return Blocked("GitHub deployment is already retrying.", failedTaskId);
         }
 
-        return new RetryOptions(false, false, true, null);
+        return new RetryOptions(false, false, true, null, failedTaskId);
     }
+
+    private static RetryOptions Blocked(string reason, string failedTaskId) =>
+        new(false, false, false, reason, failedTaskId);
 
     private static bool IsScaffoldFailure(string taskId) =>
         string.Equals(taskId, ProvisioningTasks.GitHubCreateRepository, StringComparison.Ordinal) ||

@@ -154,10 +154,11 @@ public sealed class SetupRetryEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_AllowsHostingRetryWhenPrototypeIsLiveButCreateJobFailed()
+    public void Evaluate_BlocksHostingRetryWhenAzureHostingAlreadyExists()
     {
         var prototype = CreatePrototype(PrototypeStatus.Live);
         prototype.PrototypeUrl = "https://example.azurewebsites.net";
+        prototype.AzureWebAppName = "example";
         var progress = FailedProgress(ProvisioningTasks.AzureResources);
         var jobs = new List<ProvisioningJob>
         {
@@ -173,7 +174,8 @@ public sealed class SetupRetryEvaluatorTests
 
         var result = SetupRetryEvaluator.Evaluate(prototype, progress, jobs, canManage: true, gitHubTokenConfigured: true);
 
-        Assert.True(result.CanRetryProvisioning);
+        Assert.False(result.CanRetryProvisioning);
+        Assert.Contains("already available", result.BlockedReason, StringComparison.OrdinalIgnoreCase);
     }
 
     private static Prototype CreatePrototype(PrototypeStatus status) => new()

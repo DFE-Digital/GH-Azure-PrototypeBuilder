@@ -1,0 +1,42 @@
+@model PrototypeManager.Web.Pages.Prototypes.DetailsModel
+
+<dialog id="change-compass-work-item-modal"
+        class="dfe-f-modal govuk-!-margin-0"
+        data-module="dfe-f-modal"
+        aria-labelledby="change-compass-work-item-modal-title"
+        aria-describedby="change-compass-work-item-modal-description">
+    <div class="dfe-f-modal__panel">
+        <form method="post" asp-page-handler="UpdateCompassWorkItem" asp-route-id="@Model.Prototype!.Id">
+            <header class="dfe-f-modal__header">
+                <h2 class="govuk-heading-m dfe-f-modal__title" id="change-compass-work-item-modal-title">Assign COMPASS work item</h2>
+                <button type="button" class="dfe-f-modal__close" data-dfe-modal-close aria-label="Close">
+                    <span class="dfe-f-modal__close-x" aria-hidden="true">x</span>
+                </button>
+            </header>
+            <div class="dfe-f-modal__body" id="change-compass-work-item-modal-description">
+                <p class="govuk-body">Link this prototype to a COMPASS work item, or clear the link.</p>
+                <div class="govuk-form-group">
+                    <label class="govuk-label" for="selectedCompassWorkItemId">COMPASS work item</label>
+                    <select class="govuk-select" id="selectedCompassWorkItemId" name="SelectedCompassWorkItemId">
+                        <option value="">Not linked</option>
+                        @foreach (var item in Model.CompassWorkItems)
+                        {
+                            @if (Model.SelectedCompassWorkItemId == item.Id || Model.Prototype.CompassWorkItemId == item.Id)
+                            {
+                                <option value="@item.Id" selected="selected">@item.Title</option>
+                            }
+                            else
+                            {
+                                <option value="@item.Id">@item.Title</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+            <footer class="dfe-f-modal__footer">
+                <button type="submit" class="govuk-button">Save work item</button>
+                <button type="button" class="govuk-button govuk-button--secondary" data-dfe-modal-close>Cancel</button>
+            </footer>
+        </form>
+    </div>
+</dialog>

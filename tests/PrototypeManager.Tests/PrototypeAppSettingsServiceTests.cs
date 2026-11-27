@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PrototypeManager.Application;
 using PrototypeManager.Domain;
@@ -117,7 +118,46 @@ public sealed class PrototypeAppSettingsServiceTests
             isSupport: false);
 
         Assert.Contains(settings, setting =>
-            setting.Key == "API_BASE_URL" && setting.IsPendingSync);
+            setting.Key == "API_BASE_URL" &&
+            setting.IsPendingSync &&
+            setting.SyncStatus == AppSettingSyncStatuses.Pending);
+    }
+
+    [Fact]
+    public async Task GetSettingsAsync_ReportsSyncingStatusWhileJobRunning()
+    {
+        await using var context = await CreateContextAsync();
+        var prototype = CreatePrototype();
+        context.Prototypes.Add(prototype);
+        context.PrototypeAppSettings.Add(new PrototypeAppSetting
+        {
+            PrototypeId = prototype.Id,
+            Key = "API_BASE_URL",
+            Value = "https://example.test",
+            UpdatedAt = DateTimeOffset.UtcNow,
+            UpdatedBy = prototype.OwnerEmail
+        });
+        context.ProvisioningJobs.Add(new ProvisioningJob
+        {
+            PrototypeId = prototype.Id,
+            Type = ProvisioningJobType.UpdateAppSettings,
+            Status = ProvisioningJobStatus.Running,
+            CreatedAt = DateTimeOffset.UtcNow,
+            StartedAt = DateTimeOffset.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        var service = CreateService(context, new ProvisioningOptions { Mode = "Azure" });
+
+        var settings = await service.GetSettingsAsync(
+            prototype.Id,
+            prototype.OwnerEmail,
+            isAdmin: true,
+            isSupport: false);
+
+        Assert.Contains(settings, setting =>
+            setting.Key == "API_BASE_URL" &&
+            setting.SyncStatus == AppSettingSyncStatuses.Syncing);
     }
 
     private static PrototypeAppSettingsService CreateService(
@@ -129,7 +169,8 @@ public sealed class PrototypeAppSettingsServiceTests
             context,
             new AuditService(context),
             new AzureWebAppSettingsSyncService(new AzureWebAppResourceResolver(options)),
-            options);
+            options,
+            NullLogger<PrototypeAppSettingsService>.Instance);
     }
 
     private static Prototype CreatePrototype() => new()

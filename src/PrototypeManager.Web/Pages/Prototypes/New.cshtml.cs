@@ -10,7 +10,9 @@ namespace PrototypeManager.Web.Pages.Prototypes;
 public sealed class NewModel(
     IPrototypeService prototypeService,
     IAccessManagementService accessManagementService,
-    IGitHubOrganisationService githubOrganisationService) : PageModel
+    IGitHubOrganisationService githubOrganisationService,
+    IGitHubRepositorySearchService gitHubRepositorySearchService,
+    IGitHubPrototypeCodebaseAssessor gitHubPrototypeCodebaseAssessor) : PageModel
 {
     public IReadOnlyList<BusinessArea> AvailableBusinessAreas { get; private set; } = [];
     public IReadOnlyList<GitHubOrganisation> AllowedGitHubOrganisations { get; private set; } = [];
@@ -28,6 +30,53 @@ public sealed class NewModel(
         }
     }
 
+    public async Task<IActionResult> OnGetSearchRepositoriesAsync(string? q, CancellationToken cancellationToken)
+    {
+        var results = await gitHubRepositorySearchService.SearchAsync(q ?? string.Empty, cancellationToken);
+        var assessed = await Task.WhenAll(results.Select(async result =>
+        {
+            var assessment = await gitHubPrototypeCodebaseAssessor.AssessAsync(result.HtmlUrl, cancellationToken);
+            return ToRepositoryPayload(result.Name, result.FullName, result.HtmlUrl, assessment);
+        }));
+
+        return new JsonResult(assessed);
+    }
+
+    public async Task<IActionResult> OnGetAssessRepositoryAsync(string? url, CancellationToken cancellationToken)
+    {
+        var assessment = await gitHubPrototypeCodebaseAssessor.AssessAsync(url ?? string.Empty, cancellationToken);
+        return new JsonResult(ToAssessmentPayload(assessment));
+    }
+
+    private static object ToRepositoryPayload(
+        string name,
+        string fullName,
+        string htmlUrl,
+        PrototypeCodebaseAssessment assessment) =>
+        new
+        {
+            name,
+            fullName,
+            htmlUrl,
+            support = assessment.Support.ToString(),
+            summary = assessment.Summary,
+            kitVersion = assessment.KitVersion,
+            govUkFrontendVersion = assessment.GovUkFrontendVersion,
+            latestGovUkFrontendVersion = assessment.LatestGovUkFrontendVersion,
+            isGovUkFrontendBehind = assessment.IsGovUkFrontendBehind
+        };
+
+    private static object ToAssessmentPayload(PrototypeCodebaseAssessment assessment) =>
+        new
+        {
+            support = assessment.Support.ToString(),
+            summary = assessment.Summary,
+            kitVersion = assessment.KitVersion,
+            govUkFrontendVersion = assessment.GovUkFrontendVersion,
+            latestGovUkFrontendVersion = assessment.LatestGovUkFrontendVersion,
+            isGovUkFrontendBehind = assessment.IsGovUkFrontendBehind
+        };
+
     public async Task<IActionResult> OnPostAsync()
     {
         await LoadPageDataAsync();
@@ -41,7 +90,7 @@ public sealed class NewModel(
 
         if (string.IsNullOrWhiteSpace(Input.GitHubRepositoryUrl))
         {
-            ModelState.AddModelError(nameof(Input.GitHubRepositoryUrl), "Enter a GitHub repository URL.");
+            ModelState.AddModelError(nameof(Input.GitHubRepositoryUrl), "Enter or select a GitHub repository.");
         }
         else
         {
@@ -98,13 +147,13 @@ public sealed class NewModel(
 
     public sealed class InputModel
     {
-        [Required(ErrorMessage = "Enter a GitHub repository URL.")]
-        [Display(Name = "GitHub repository URL")]
+        [Required(ErrorMessage = "Enter or select a GitHub repository.")]
+        [Display(Name = "GitHub repository")]
         public string GitHubRepositoryUrl { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Enter a prototype app name.")]
-        [MaxLength(20)]
-        [RegularExpression("^[a-z0-9]+(?:-[a-z0-9]+)*$", ErrorMessage = "Use lowercase letters, numbers and hyphens only.")]
+        [MaxLength(SlugGenerator.AppNameMaxLength)]
+        [RegularExpression("^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", ErrorMessage = "Start with a letter. Use lowercase letters, numbers and hyphens only.")]
         [Display(Name = "Prototype app name")]
         public string AppName { get; set; } = string.Empty;
 

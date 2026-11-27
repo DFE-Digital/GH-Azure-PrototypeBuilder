@@ -6,8 +6,7 @@ using PrototypeManager.Domain;
 namespace PrototypeManager.Infrastructure;
 
 internal sealed class GitHubOrganisationService(
-    PrototypeManagerDbContext dbContext,
-    IAuditService auditService) : IGitHubOrganisationService
+    PrototypeManagerDbContext dbContext) : IGitHubOrganisationService
 {
     public async Task<IReadOnlyList<GitHubOrganisation>> GetAllAsync()
     {
@@ -18,51 +17,6 @@ internal sealed class GitHubOrganisationService(
         return organisations
             .OrderBy(organisation => organisation.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-    }
-
-    public async Task AddAsync(string organisationInput, string actorEmail)
-    {
-        var name = GitHubOrganisationNames.ParseInput(organisationInput);
-
-        var alreadyExists = await dbContext.GitHubOrganisations.AnyAsync(organisation =>
-            organisation.Name.ToLower() == name.ToLower());
-
-        if (alreadyExists)
-        {
-            throw new ValidationException("That GitHub organisation or account is already on the whitelist.");
-        }
-
-        dbContext.GitHubOrganisations.Add(new GitHubOrganisation
-        {
-            Name = name,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = actorEmail
-        });
-
-        await dbContext.SaveChangesAsync();
-        await auditService.RecordAsync(
-            null,
-            actorEmail,
-            "GitHub organisation added",
-            $"Added {name} to the GitHub organisation whitelist.");
-    }
-
-    public async Task RemoveAsync(Guid id, string actorEmail)
-    {
-        var organisation = await dbContext.GitHubOrganisations.SingleOrDefaultAsync(item => item.Id == id);
-
-        if (organisation is null)
-        {
-            return;
-        }
-
-        dbContext.GitHubOrganisations.Remove(organisation);
-        await dbContext.SaveChangesAsync();
-        await auditService.RecordAsync(
-            null,
-            actorEmail,
-            "GitHub organisation removed",
-            $"Removed {organisation.Name} from the GitHub organisation whitelist.");
     }
 
     public async Task ValidateRepositoryUrlAsync(string repositoryUrl, CancellationToken cancellationToken = default)
