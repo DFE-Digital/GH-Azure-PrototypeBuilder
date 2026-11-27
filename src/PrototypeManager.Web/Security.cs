@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using PrototypeManager.Application;
 using PrototypeManager.Domain;
@@ -14,6 +16,7 @@ public static class PrototypeManagerClaimTypes
     public const string Team = "team";
     public const string Directorate = "directorate";
     public const string BusinessAreaId = "business_area_id";
+    internal const string Transformed = "pm_claims_transformed";
 }
 
 public static class ClaimsPrincipalExtensions
@@ -161,13 +164,34 @@ public sealed class DevelopmentAuthenticationHandler(
 }
 
 public sealed class AppUserClaimsTransformation(
-    PrototypeManagerDbContext dbContext) : IClaimsTransformation
+    PrototypeManagerDbContext dbContext,
+    IMemoryCache memoryCache,
+    IHttpContextAccessor httpContextAccessor) : IClaimsTransformation
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+    private const string HttpContextItemKey = "pm.claims.transformed";
+
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
         if (principal.Identity?.IsAuthenticated != true)
         {
             return principal;
+        }
+
+        if (principal.HasClaim(PrototypeManagerClaimTypes.Transformed, "1"))
+        {
+            return principal;
+        }
+
+        var httpContext = httpContextAccessor.HttpContext;
+        if (httpContext?.Items[HttpContextItemKey] is true)
+        {
+            return principal;
+        }
+
+        if (httpContext is not null)
+        {
+            httpContext.Items[HttpContextItemKey] = true;
         }
 
         var normalizedEmail = principal.GetEmail().Trim().ToLowerInvariant();
@@ -185,7 +209,30 @@ public sealed class AppUserClaimsTransformation(
             return principal;
         }
 
-        // Prefer matching a pre-provisioned access record by email; fall back to Entra object id.
+        var cacheKey = BuildCacheKey(normalizedEmail, entraObjectId);
+        if (memoryCache.TryGetValue(cacheKey, out CachedAppUserClaims? cached) && cached is not null)
+        {
+            ApplyClaims(identity, principal, cached);
+            return principal;
+        }
+
+        var snapshot = await LoadOrCreateAppUserAsync(normalizedEmail, entraObjectId, displayName, principal);
+        if (snapshot is null)
+        {
+            return principal;
+        }
+
+        memoryCache.Set(cacheKey, snapshot, CacheDuration);
+        ApplyClaims(identity, principal, snapshot);
+        return principal;
+    }
+
+    private async Task<CachedAppUserClaims?> LoadOrCreateAppUserAsync(
+        string normalizedEmail,
+        string? entraObjectId,
+        string displayName,
+        ClaimsPrincipal principal)
+    {
         AppUser? appUser = null;
         if (!string.IsNullOrWhiteSpace(normalizedEmail))
         {
@@ -205,7 +252,7 @@ public sealed class AppUserClaimsTransformation(
         {
             if (string.IsNullOrWhiteSpace(normalizedEmail))
             {
-                return principal;
+                return null;
             }
 
             appUser = new AppUser
@@ -264,28 +311,38 @@ public sealed class AppUserClaimsTransformation(
             }
         }
 
-        // Prefer a stored Entra-enriched display name when the token only has email.
         var resolvedDisplayName = !string.IsNullOrWhiteSpace(displayName) &&
                                   !string.Equals(displayName, normalizedEmail, StringComparison.OrdinalIgnoreCase)
             ? displayName
             : FirstNonEmpty(appUser.DisplayName, displayName, normalizedEmail) ?? normalizedEmail;
 
-        if (!string.IsNullOrWhiteSpace(resolvedDisplayName))
+        return new CachedAppUserClaims(
+            resolvedDisplayName,
+            appUser.IsAdmin,
+            appUser.BusinessAreaAssignments.Select(assignment => assignment.BusinessAreaId).ToArray());
+    }
+
+    private static void ApplyClaims(
+        ClaimsIdentity identity,
+        ClaimsPrincipal principal,
+        CachedAppUserClaims snapshot)
+    {
+        if (!string.IsNullOrWhiteSpace(snapshot.DisplayName))
         {
-            ReplaceClaim(identity, ClaimTypes.Name, resolvedDisplayName);
+            ReplaceClaim(identity, ClaimTypes.Name, snapshot.DisplayName);
             if (string.IsNullOrWhiteSpace(principal.FindFirstValue("name")))
             {
-                identity.AddClaim(new Claim("name", resolvedDisplayName));
+                identity.AddClaim(new Claim("name", snapshot.DisplayName));
             }
         }
 
-        if (appUser.IsAdmin && !principal.IsInRole(AppRoles.Admin))
+        if (snapshot.IsAdmin && !principal.IsInRole(AppRoles.Admin))
         {
             // Use this identity's RoleClaimType (Entra sets it to "roles", not ClaimTypes.Role).
             identity.AddClaim(new Claim(identity.RoleClaimType, AppRoles.Admin));
         }
 
-        foreach (var businessAreaId in appUser.BusinessAreaAssignments.Select(assignment => assignment.BusinessAreaId))
+        foreach (var businessAreaId in snapshot.BusinessAreaIds)
         {
             if (!identity.HasClaim(PrototypeManagerClaimTypes.BusinessAreaId, businessAreaId.ToString()))
             {
@@ -293,8 +350,16 @@ public sealed class AppUserClaimsTransformation(
             }
         }
 
-        return principal;
+        if (!identity.HasClaim(PrototypeManagerClaimTypes.Transformed, "1"))
+        {
+            identity.AddClaim(new Claim(PrototypeManagerClaimTypes.Transformed, "1"));
+        }
     }
+
+    private static string BuildCacheKey(string normalizedEmail, string? entraObjectId) =>
+        !string.IsNullOrWhiteSpace(normalizedEmail)
+            ? $"appuser:claims:email:{normalizedEmail}"
+            : $"appuser:claims:oid:{entraObjectId}";
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
@@ -309,4 +374,9 @@ public sealed class AppUserClaimsTransformation(
 
         identity.AddClaim(new Claim(type, value));
     }
+
+    private sealed record CachedAppUserClaims(
+        string DisplayName,
+        bool IsAdmin,
+        IReadOnlyList<Guid> BusinessAreaIds);
 }

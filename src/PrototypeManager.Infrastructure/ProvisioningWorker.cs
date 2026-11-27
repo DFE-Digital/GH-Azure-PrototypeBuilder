@@ -14,16 +14,27 @@ internal sealed class ProvisioningWorker(
     IOptions<GitHubOptions> githubOptions,
     ILogger<ProvisioningWorker> logger) : BackgroundService
 {
+    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan TemporarySkuInterval = TimeSpan.FromMinutes(1);
+
     private readonly GitHubOptions _githubOptions = githubOptions.Value;
+    private DateTimeOffset _nextTemporarySkuCheck = DateTimeOffset.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            var processedJob = false;
+
             try
             {
-                await ProcessNextJobAsync(stoppingToken);
-                await ProcessExpiredTemporarySkusAsync(stoppingToken);
+                processedJob = await ProcessNextJobAsync(stoppingToken);
+
+                if (DateTimeOffset.UtcNow >= _nextTemporarySkuCheck)
+                {
+                    await ProcessExpiredTemporarySkusAsync(stoppingToken);
+                    _nextTemporarySkuCheck = DateTimeOffset.UtcNow.Add(TemporarySkuInterval);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -34,7 +45,8 @@ internal sealed class ProvisioningWorker(
                 logger.LogError(exception, "Provisioning worker encountered an unexpected error.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+            // Poll quickly when work was found; otherwise ease off to spare Basic SQL DTUs.
+            await Task.Delay(processedJob ? TimeSpan.FromSeconds(2) : IdleDelay, stoppingToken);
         }
     }
 
@@ -53,7 +65,7 @@ internal sealed class ProvisioningWorker(
         }
     }
 
-    private async Task ProcessNextJobAsync(CancellationToken cancellationToken)
+    private async Task<bool> ProcessNextJobAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<PrototypeManagerDbContext>();
@@ -66,6 +78,15 @@ internal sealed class ProvisioningWorker(
         var githubRepositoryScaffoldService = scope.ServiceProvider.GetRequiredService<IGitHubRepositoryScaffoldService>();
         var prototypeReadyNotifier = scope.ServiceProvider.GetRequiredService<IPrototypeReadyNotifier>();
 
+        var hasQueuedJobs = await dbContext.ProvisioningJobs
+            .AsNoTracking()
+            .AnyAsync(x => x.Status == ProvisioningJobStatus.Queued, cancellationToken);
+
+        if (!hasQueuedJobs)
+        {
+            return false;
+        }
+
         var queuedJobs = await dbContext.ProvisioningJobs
             .Include(x => x.Prototype)
             .Where(x => x.Status == ProvisioningJobStatus.Queued)
@@ -75,7 +96,7 @@ internal sealed class ProvisioningWorker(
 
         if (job?.Prototype is null)
         {
-            return;
+            return false;
         }
 
         job.Status = ProvisioningJobStatus.Running;
@@ -187,6 +208,8 @@ internal sealed class ProvisioningWorker(
             await dbContext.SaveChangesAsync(cancellationToken);
             await auditService.RecordAsync(job.PrototypeId, "system", $"{job.Type} failed", job.ErrorMessage);
         }
+
+        return true;
     }
 
     private static string GetUserFacingErrorMessage(Exception exception) =>

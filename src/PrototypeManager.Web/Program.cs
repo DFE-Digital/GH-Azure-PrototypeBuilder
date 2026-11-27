@@ -12,6 +12,7 @@ using PrototypeManager.Web;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGovUkFrontend();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddPrototypeManagerInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddTransient<IClaimsTransformation, AppUserClaimsTransformation>();
 
