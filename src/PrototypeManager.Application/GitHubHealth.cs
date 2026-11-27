@@ -1,15 +1,40 @@
 namespace PrototypeManager.Application;
 
-public enum GitHubHealthStatus
+public enum DependencyHealthStatus
 {
     Healthy,
     Attention,
     Unavailable
 }
 
+public static class DependencyHealth
+{
+    public static DependencyHealthStatus Combine(DependencyHealthStatus left, DependencyHealthStatus right)
+    {
+        if (left == DependencyHealthStatus.Unavailable || right == DependencyHealthStatus.Unavailable)
+        {
+            return DependencyHealthStatus.Unavailable;
+        }
+
+        if (left == DependencyHealthStatus.Attention || right == DependencyHealthStatus.Attention)
+        {
+            return DependencyHealthStatus.Attention;
+        }
+
+        return DependencyHealthStatus.Healthy;
+    }
+
+    public static string Label(DependencyHealthStatus status) => status switch
+    {
+        DependencyHealthStatus.Healthy => "Healthy",
+        DependencyHealthStatus.Attention => "Needs attention",
+        _ => "Unavailable"
+    };
+}
+
 public sealed class GitHubHealthReport
 {
-    public GitHubHealthStatus Status { get; init; } = GitHubHealthStatus.Unavailable;
+    public DependencyHealthStatus Status { get; init; } = DependencyHealthStatus.Unavailable;
     public string Summary { get; init; } = string.Empty;
     public DateTimeOffset CheckedAt { get; init; }
     public bool IsConfigured { get; init; }
@@ -44,8 +69,8 @@ public sealed class GitHubHealthReport
 
     public string StatusLabel => Status switch
     {
-        GitHubHealthStatus.Healthy => "Healthy",
-        GitHubHealthStatus.Attention => "Needs attention",
+        DependencyHealthStatus.Healthy => "Healthy",
+        DependencyHealthStatus.Attention => "Needs attention",
         _ => "Unavailable"
     };
 }

@@ -119,6 +119,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IAccessManagementService, AccessManagementService>();
         services.AddScoped<IGitHubOrganisationService, GitHubOrganisationService>();
         services.AddScoped<IGitHubHealthService, GitHubHealthService>();
+        services.AddScoped<IAzureHealthService, AzureHealthService>();
         services.AddScoped<GitHubRepositorySearchService>();
         services.AddScoped<NullGitHubRepositorySearchService>();
         services.AddScoped<IGitHubRepositorySearchService>(serviceProvider =>

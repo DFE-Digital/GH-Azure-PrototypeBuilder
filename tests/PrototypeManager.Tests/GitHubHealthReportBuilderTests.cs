@@ -47,7 +47,7 @@ public sealed class GitHubHealthReportBuilderTests
             OrganisationAccessChecked = true
         });
 
-        Assert.Equal(GitHubHealthStatus.Healthy, report.Status);
+        Assert.Equal(DependencyHealthStatus.Healthy, report.Status);
         Assert.Equal("DDT Prototype Manager", report.AppName);
         Assert.Equal("dfe-digital", report.Installation!.AccountLogin);
         Assert.Equal(6, report.SatisfiedPermissionCount);
@@ -72,7 +72,7 @@ public sealed class GitHubHealthReportBuilderTests
             RateLimitJson = RateLimitJson(remaining: 1000)
         });
 
-        Assert.Equal(GitHubHealthStatus.Attention, report.Status);
+        Assert.Equal(DependencyHealthStatus.Attention, report.Status);
         var contents = Assert.Single(report.Permissions, permission => permission.Label == "Contents");
         Assert.False(contents.IsSatisfied);
         Assert.Equal("Read", contents.GrantedLabel);
@@ -90,7 +90,7 @@ public sealed class GitHubHealthReportBuilderTests
             OrganisationAccessChecked = true
         });
 
-        Assert.Equal(GitHubHealthStatus.Unavailable, report.Status);
+        Assert.Equal(DependencyHealthStatus.Unavailable, report.Status);
         Assert.True(report.Installation!.IsSuspended);
         Assert.Contains(report.Issues, issue => issue.Contains("suspended", StringComparison.OrdinalIgnoreCase));
     }
@@ -100,7 +100,7 @@ public sealed class GitHubHealthReportBuilderTests
     {
         var report = GitHubHealthReportBuilder.Build(new GitHubHealthSnapshot());
 
-        Assert.Equal(GitHubHealthStatus.Unavailable, report.Status);
+        Assert.Equal(DependencyHealthStatus.Unavailable, report.Status);
         Assert.Equal("Not configured", report.AuthenticationMode);
         Assert.Contains(report.Issues, issue => issue.Contains("GitHub App", StringComparison.Ordinal));
     }
@@ -124,7 +124,7 @@ public sealed class GitHubHealthReportBuilderTests
             RateLimitJson = RateLimitJson(remaining: 1000)
         });
 
-        Assert.Equal(GitHubHealthStatus.Attention, report.Status);
+        Assert.Equal(DependencyHealthStatus.Attention, report.Status);
         Assert.Contains(report.Issues, issue => issue.Contains("dfe-digital", StringComparison.Ordinal));
         Assert.False(Assert.Single(report.Organisations).CanAccess);
     }
@@ -141,7 +141,7 @@ public sealed class GitHubHealthReportBuilderTests
             RateLimitJson = RateLimitJson(remaining: 0)
         });
 
-        Assert.Equal(GitHubHealthStatus.Unavailable, report.Status);
+        Assert.Equal(DependencyHealthStatus.Unavailable, report.Status);
         Assert.Contains(report.Issues, issue => issue.Contains("exhausted", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -165,7 +165,7 @@ public sealed class GitHubHealthReportBuilderTests
 
         var report = await service.GetReportAsync();
 
-        Assert.Equal(GitHubHealthStatus.Unavailable, report.Status);
+        Assert.Equal(DependencyHealthStatus.Unavailable, report.Status);
         Assert.False(report.IsConfigured);
     }
 

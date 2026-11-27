@@ -19,8 +19,8 @@
         <li class="prototype-side-nav__item @(activeSection == AdminNavigation.PrototypesSection ? "prototype-side-nav__item--active" : string.Empty)">
             <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.PrototypesSection)">Manage prototypes</a>
         </li>
-        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.GitHubHealthSection ? "prototype-side-nav__item--active" : string.Empty)">
-            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.GitHubHealthSection)">GitHub health</a>
+        <li class="prototype-side-nav__item @(activeSection == AdminNavigation.DependencyHealthSection ? "prototype-side-nav__item--active" : string.Empty)">
+            <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.DependencyHealthSection)">Dependency health</a>
         </li>
         <li class="prototype-side-nav__item @(activeSection == AdminNavigation.GitHubCleanupSection ? "prototype-side-nav__item--active" : string.Empty)">
             <a class="prototype-side-nav__link govuk-link" href="@AdminNavigation.SectionUrl(Url, AdminNavigation.GitHubCleanupSection)">GitHub cleanup</a>

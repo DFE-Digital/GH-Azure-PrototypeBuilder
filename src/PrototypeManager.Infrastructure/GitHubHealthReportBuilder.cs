@@ -200,10 +200,10 @@ internal static class GitHubHealthReportBuilder
                           installation?.IsSuspended == true ||
                           rateExhausted;
         var status = unavailable
-            ? GitHubHealthStatus.Unavailable
+            ? DependencyHealthStatus.Unavailable
             : issues.Count > 0
-                ? GitHubHealthStatus.Attention
-                : GitHubHealthStatus.Healthy;
+                ? DependencyHealthStatus.Attention
+                : DependencyHealthStatus.Healthy;
 
         return new GitHubHealthReport
         {
@@ -246,7 +246,7 @@ internal static class GitHubHealthReportBuilder
     internal static bool Satisfies(string? granted, string required) => Rank(granted) >= Rank(required);
 
     private static string SummaryFor(
-        GitHubHealthStatus status,
+        DependencyHealthStatus status,
         bool usesGitHubApp,
         string? installationLogin,
         int issueCount,
@@ -254,13 +254,13 @@ internal static class GitHubHealthReportBuilder
     {
         return status switch
         {
-            GitHubHealthStatus.Healthy when usesGitHubApp && !string.IsNullOrWhiteSpace(installationLogin) =>
+            DependencyHealthStatus.Healthy when usesGitHubApp && !string.IsNullOrWhiteSpace(installationLogin) =>
                 $"GitHub is healthy. The app installation on {installationLogin} has the access Prototype Manager needs.",
-            GitHubHealthStatus.Healthy =>
+            DependencyHealthStatus.Healthy =>
                 "GitHub is healthy. The configured credentials can access the allowed organisations.",
-            GitHubHealthStatus.Attention when issueCount == 1 =>
+            DependencyHealthStatus.Attention when issueCount == 1 =>
                 "GitHub needs attention. 1 check failed.",
-            GitHubHealthStatus.Attention =>
+            DependencyHealthStatus.Attention =>
                 $"GitHub needs attention. {issueCount} checks failed.",
             _ when !isConfigured =>
                 "GitHub is not configured.",

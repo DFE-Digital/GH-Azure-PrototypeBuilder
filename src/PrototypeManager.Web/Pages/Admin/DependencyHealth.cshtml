@@ -1,0 +1,565 @@
+@page
+@model PrototypeManager.Web.Pages.Admin.DependencyHealthModel
+@using PrototypeManager.Application
+@{
+    ViewData["Title"] = "Dependency health";
+    ViewData[AdminNavigation.SectionViewDataKey] = AdminNavigation.DependencyHealthSection;
+    var github = Model.GitHub;
+    var azure = Model.Azure;
+
+    string StatusBadgeClass(DependencyHealthStatus status) => status switch
+    {
+        DependencyHealthStatus.Healthy => "dfe-c-fe-badge dfe-c-fe-badge--success",
+        DependencyHealthStatus.Attention => "dfe-c-fe-badge dfe-c-fe-badge--warning",
+        _ => "dfe-c-fe-badge dfe-c-fe-badge--danger"
+    };
+
+    string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+}
+
+<div class="dfe-c-fe-shell">
+    <header class="dfe-c-fe-page-header">
+        <div class="dfe-c-fe-page-header__intro">
+            <h1 class="dfe-c-fe-title">Dependency health</h1>
+            <p class="dfe-c-fe-text">
+                Live check of the Azure hosting subscription and the GitHub App this environment uses.
+                Private keys, tokens, and Azure credentials are not shown.
+            </p>
+            <p class="govuk-body govuk-!-margin-bottom-0">
+                Checked @Model.CheckedAt.ToString("dd MMM yyyy HH:mm") UTC.
+                <a class="govuk-link" href="@Url.Page("/Admin/DependencyHealth")">Check again</a>.
+            </p>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <govuk-notification-banner>
+            <govuk-notification-banner-title>Update</govuk-notification-banner-title>
+            <p class="govuk-notification-banner__heading">@Model.StatusMessage</p>
+        </govuk-notification-banner>
+    }
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="govuk-error-summary" data-module="govuk-error-summary">
+            <div role="alert">
+                <h2 class="govuk-error-summary__title">There is a problem</h2>
+                <div class="govuk-error-summary__body" asp-validation-summary="All"></div>
+            </div>
+        </div>
+    }
+
+    <div class="dfe-c-fe-dashboard__metrics govuk-!-margin-bottom-6">
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Overall</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="@StatusBadgeClass(Model.OverallStatus)">@Model.OverallLabel</span>
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Azure and GitHub both need to be usable before a prototype can be created and deployed.
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">Azure</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="@StatusBadgeClass(azure.Status)">@azure.StatusLabel</span>
+            </p>
+            <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                <a class="govuk-link" href="#azure">Azure details</a>
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h2 class="dfe-c-fe-metric__label">GitHub</h2>
+            <p class="dfe-c-fe-metric__value">
+                <span class="@StatusBadgeClass(github.Status)">@github.StatusLabel</span>
+            </p>
+            <p class="dfe-c-fe-metric__action govuk-!-margin-bottom-0">
+                <a class="govuk-link" href="#github">GitHub details</a>
+            </p>
+        </section>
+    </div>
+
+    <h2 class="govuk-heading-l" id="azure">Azure</h2>
+    <p class="govuk-body">@azure.Summary</p>
+    @if (azure.Issues.Count > 0)
+    {
+        <ul class="govuk-list govuk-list--bullet">
+            @foreach (var issue in azure.Issues)
+            {
+                <li>@issue</li>
+            }
+        </ul>
+    }
+
+    <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Mode</dt>
+            <dd class="govuk-summary-list__value">@azure.Mode</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Subscription</dt>
+            <dd class="govuk-summary-list__value">
+                @if (!string.IsNullOrWhiteSpace(azure.SubscriptionUrl))
+                {
+                    <a class="govuk-link" href="@azure.SubscriptionUrl" target="_blank" rel="noopener noreferrer">
+                        @(string.IsNullOrWhiteSpace(azure.SubscriptionName) ? azure.SubscriptionId : azure.SubscriptionName)
+                        <span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                    </a>
+                    @if (!string.IsNullOrWhiteSpace(azure.SubscriptionName))
+                    {
+                        <div class="govuk-hint govuk-!-margin-bottom-0">@azure.SubscriptionId</div>
+                    }
+                }
+                else
+                {
+                    @Show(azure.SubscriptionId)
+                }
+            </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Location</dt>
+            <dd class="govuk-summary-list__value">@Show(azure.Location)</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Authentication</dt>
+            <dd class="govuk-summary-list__value">
+                @(azure.IsAzureMode
+                    ? azure.SubscriptionReadable ? "Default Azure credential can read the subscription" : "Could not read the subscription"
+                    : "Not contacted in Mock mode")
+            </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Hosting template</dt>
+            <dd class="govuk-summary-list__value">
+                @(azure.TemplateFound ? $"Found ({azure.TemplatePath})" : $"Not found ({Show(azure.TemplatePath)})")
+            </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Allowed regions</dt>
+            <dd class="govuk-summary-list__value">@(azure.AllowedRegions.Count == 0 ? "—" : string.Join(", ", azure.AllowedRegions))</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Allowed plans</dt>
+            <dd class="govuk-summary-list__value">@(azure.AllowedSkus.Count == 0 ? "—" : string.Join(", ", azure.AllowedSkus))</dd>
+        </div>
+        @if (azure.IsAzureMode)
+        {
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Free plan pool</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (!string.IsNullOrWhiteSpace(azure.PoolResourceGroupUrl))
+                    {
+                        <a class="govuk-link" href="@azure.PoolResourceGroupUrl" target="_blank" rel="noopener noreferrer">
+                            @azure.PoolResourceGroupName<span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                        </a>
+                    }
+                    else
+                    {
+                        @azure.PoolResourceGroupName
+                    }
+                    <div class="govuk-hint govuk-!-margin-bottom-0">
+                        @(azure.PoolResourceGroupExists
+                            ? $"{azure.RemainingAppSlots} of {azure.TotalAppSlots} app slots spare"
+                            : "Resource group not found")
+                    </div>
+                </dd>
+            </div>
+        }
+    </dl>
+
+    @if (azure.Plans.Count > 0)
+    {
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Free plan</th>
+                    <th scope="col" class="govuk-table__header">Apps</th>
+                    <th scope="col" class="govuk-table__header">Spare</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var plan in azure.Plans)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@plan.Name</td>
+                    <td class="govuk-table__cell">@plan.AppCount of @plan.AppCapacity</td>
+                    <td class="govuk-table__cell">@plan.SpareApps</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    <h2 class="govuk-heading-l" id="github">GitHub</h2>
+    <p class="govuk-body">@github.Summary</p>
+    @if (github.Issues.Count > 0)
+    {
+        <ul class="govuk-list govuk-list--bullet">
+            @foreach (var issue in github.Issues)
+            {
+                <li>@issue</li>
+            }
+        </ul>
+    }
+
+    <div class="dfe-c-fe-dashboard__metrics govuk-!-margin-bottom-6">
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h3 class="dfe-c-fe-metric__label">Authentication</h3>
+            <p class="dfe-c-fe-metric__value">@github.AuthenticationMode</p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                @(github.UsesGitHubApp ? Show(github.AppName) : Show(github.AuthenticatedLogin))
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h3 class="dfe-c-fe-metric__label">Permissions</h3>
+            <p class="dfe-c-fe-metric__value">
+                @(github.PermissionsChecked ? $"{github.SatisfiedPermissionCount} of {github.Permissions.Count}" : "—")
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Required GitHub App permissions that are granted.
+            </p>
+        </section>
+        <section class="dfe-c-fe-panel dfe-c-fe-metric">
+            <h3 class="dfe-c-fe-metric__label">Organisations</h3>
+            <p class="dfe-c-fe-metric__value">
+                @(github.Organisations.Any(organisation => organisation.WasChecked)
+                    ? $"{github.AccessibleOrganisationCount} of {github.Organisations.Count}"
+                    : github.Organisations.Count.ToString())
+            </p>
+            <p class="dfe-c-fe-text govuk-!-margin-bottom-0 govuk-!-margin-top-2">
+                Allowed organisations this credential can access.
+            </p>
+        </section>
+    </div>
+
+    <h3 class="govuk-heading-m">Authentication</h3>
+    <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Mode</dt>
+            <dd class="govuk-summary-list__value">@github.AuthenticationMode</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">API</dt>
+            <dd class="govuk-summary-list__value">@github.ApiBaseUrl</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Repository checks</dt>
+            <dd class="govuk-summary-list__value">@(github.ValidateWithApi ? "GitHub API validation is on" : "Format-only validation is on")</dd>
+        </div>
+        @if (github.AppId > 0)
+        {
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">App ID</dt>
+                <dd class="govuk-summary-list__value">@github.AppId</dd>
+            </div>
+        }
+        @if (github.InstallationId > 0)
+        {
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Installation ID</dt>
+                <dd class="govuk-summary-list__value">@github.InstallationId</dd>
+            </div>
+        }
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Private key</dt>
+            <dd class="govuk-summary-list__value">@(github.PrivateKeyConfigured ? "Configured" : "Not configured")</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Personal access token</dt>
+            <dd class="govuk-summary-list__value">
+                @if (github.PersonalAccessTokenConfigured && github.UsesGitHubApp)
+                {
+                    @:Configured, unused while the GitHub App is set
+                }
+                else if (github.PersonalAccessTokenConfigured)
+                {
+                    @:Configured
+                }
+                else
+                {
+                    @:Not configured
+                }
+            </dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(github.AppName))
+        {
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">GitHub App</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (!string.IsNullOrWhiteSpace(github.AppUrl))
+                    {
+                        <a class="govuk-link" href="@github.AppUrl" target="_blank" rel="noopener noreferrer">
+                            @github.AppName<span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                        </a>
+                    }
+                    else
+                    {
+                        @github.AppName
+                    }
+                </dd>
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(github.AuthenticatedLogin))
+        {
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Token account</dt>
+                <dd class="govuk-summary-list__value">@github.AuthenticatedLogin</dd>
+            </div>
+        }
+    </dl>
+
+    @if (github.Installation is not null)
+    {
+        <h3 class="govuk-heading-m">Installation</h3>
+        <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Account</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (!string.IsNullOrWhiteSpace(github.Installation.AccountUrl))
+                    {
+                        <a class="govuk-link" href="@github.Installation.AccountUrl" target="_blank" rel="noopener noreferrer">
+                            @Show(github.Installation.AccountLogin)<span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                        </a>
+                    }
+                    else
+                    {
+                        @Show(github.Installation.AccountLogin)
+                    }
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Account type</dt>
+                <dd class="govuk-summary-list__value">@github.Installation.AccountType</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Repository access</dt>
+                <dd class="govuk-summary-list__value">@github.Installation.RepositorySelectionLabel</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Suspended</dt>
+                <dd class="govuk-summary-list__value">@(github.Installation.IsSuspended ? "Yes" : "No")</dd>
+            </div>
+            @if (github.AccessibleRepositoryCount is not null)
+            {
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">Accessible repositories</dt>
+                    <dd class="govuk-summary-list__value">@github.AccessibleRepositoryCount</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(github.Installation.SettingsUrl))
+            {
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">Installation settings</dt>
+                    <dd class="govuk-summary-list__value">
+                        <a class="govuk-link" href="@github.Installation.SettingsUrl" target="_blank" rel="noopener noreferrer">
+                            Manage this installation on GitHub<span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                        </a>
+                    </dd>
+                </div>
+            }
+        </dl>
+        @if (string.Equals(github.Installation.RepositorySelectionLabel, "Selected repositories", StringComparison.Ordinal))
+        {
+            <p class="govuk-body">
+                This installation can only see selected repositories. Repositories it creates are included automatically. Add any other repository to the installation before hosting it.
+            </p>
+        }
+    }
+
+    @if (github.PermissionsChecked)
+    {
+        <h3 class="govuk-heading-m">Permissions</h3>
+        <p class="govuk-body">
+            These are the repository permissions Prototype Manager needs on the installation.
+            After changing them on the GitHub App, an organisation owner must accept the update before new tokens include them.
+        </p>
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Permission</th>
+                    <th scope="col" class="govuk-table__header">Required</th>
+                    <th scope="col" class="govuk-table__header">Granted</th>
+                    <th scope="col" class="govuk-table__header">Status</th>
+                    <th scope="col" class="govuk-table__header">Used for</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var permission in github.Permissions)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">@permission.Label</td>
+                    <td class="govuk-table__cell">@permission.RequiredLabel</td>
+                    <td class="govuk-table__cell">@permission.GrantedLabel</td>
+                    <td class="govuk-table__cell">
+                        @if (permission.IsSatisfied)
+                        {
+                            <span class="dfe-c-fe-badge dfe-c-fe-badge--success">Met</span>
+                        }
+                        else
+                        {
+                            <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">Missing</span>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">@permission.Purpose</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        @if (github.AdditionalPermissions.Count > 0)
+        {
+            <p class="govuk-body">
+                Also granted:
+                @string.Join(", ", github.AdditionalPermissions.Select(permission => $"{permission.Label} ({permission.LevelLabel.ToLowerInvariant()})")).
+            </p>
+        }
+    }
+    else if (github.TokenScopes.Count > 0)
+    {
+        <h3 class="govuk-heading-m">Token scopes</h3>
+        <ul class="govuk-list govuk-list--bullet">
+            @foreach (var scope in github.TokenScopes)
+            {
+                <li><code>@scope</code></li>
+            }
+        </ul>
+    }
+
+    @if (github.RateLimit is not null)
+    {
+        <h3 class="govuk-heading-m">API rate limit</h3>
+        <p class="govuk-body">
+            @github.RateLimit.Remaining of @github.RateLimit.Limit core requests remaining.
+            Resets @github.RateLimit.ResetsAt.ToString("dd MMM yyyy HH:mm") UTC.
+        </p>
+    }
+
+    <h3 class="govuk-heading-m" id="allowed-organisations">Allowed GitHub organisations</h3>
+    <p class="govuk-body">
+        Prototype Manager only creates and hosts repositories in this list.
+        The GitHub App must be installed on each one. The usual organisation is <strong>dfe-digital</strong>.
+        Use the installation settings link above to manage that installation on GitHub.
+        At least one organisation must stay in the list.
+    </p>
+
+    <form method="post" asp-page-handler="Add" class="prototype-action-form">
+        <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.OrganisationName)]?.Errors.Count > 0 ? "govuk-form-group--error" : null)">
+            <label class="govuk-label" asp-for="OrganisationName"></label>
+            <div id="organisation-name-hint" class="govuk-hint">
+                Organisation name, account name, or a github.com URL. For example, dfe-digital or https://github.com/dfe-digital.
+            </div>
+            <span class="govuk-error-message" asp-validation-for="OrganisationName"></span>
+            <input class="govuk-input govuk-input--width-20" asp-for="OrganisationName" aria-describedby="organisation-name-hint" autocomplete="off" />
+        </div>
+        <govuk-button>Add organisation</govuk-button>
+    </form>
+
+    @if (!github.Organisations.Any())
+    {
+        <p class="govuk-body">No GitHub organisations are allowed yet.</p>
+    }
+    else
+    {
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Organisation</th>
+                    <th scope="col" class="govuk-table__header">Access</th>
+                    <th scope="col" class="govuk-table__header">Added</th>
+                    <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+            @foreach (var organisation in github.Organisations)
+            {
+                <tr class="govuk-table__row">
+                    <td class="govuk-table__cell">
+                        @if (!string.IsNullOrWhiteSpace(organisation.HtmlUrl))
+                        {
+                            <a class="govuk-link" href="@organisation.HtmlUrl" target="_blank" rel="noopener noreferrer">
+                                @organisation.Name<span class="govuk-visually-hidden"> (opens in a new tab)</span>
+                            </a>
+                        }
+                        else
+                        {
+                            @organisation.Name
+                        }
+                        @if (!string.IsNullOrWhiteSpace(organisation.CanonicalLogin) &&
+                             !string.Equals(organisation.CanonicalLogin, organisation.Name, StringComparison.Ordinal))
+                        {
+                            <div class="govuk-hint govuk-!-margin-bottom-0">GitHub login: @organisation.CanonicalLogin</div>
+                        }
+                        @if (organisation.MatchesInstallation)
+                        {
+                            <div class="govuk-hint govuk-!-margin-bottom-0">Matches the GitHub App installation</div>
+                        }
+                    </td>
+                    <td class="govuk-table__cell">
+                        @if (!organisation.WasChecked)
+                        {
+                            <span class="dfe-c-fe-badge dfe-c-fe-badge--muted">Not checked</span>
+                        }
+                        else if (organisation.CanAccess)
+                        {
+                            <span class="dfe-c-fe-badge dfe-c-fe-badge--success">Accessible</span>
+                        }
+                        else
+                        {
+                            <span class="dfe-c-fe-badge dfe-c-fe-badge--danger">No access</span>
+                            @if (!string.IsNullOrWhiteSpace(organisation.AccessError))
+                            {
+                                <div class="govuk-hint govuk-!-margin-bottom-0">@organisation.AccessError</div>
+                            }
+                        }
+                    </td>
+                    <td class="govuk-table__cell">
+                        @organisation.CreatedAt.ToString("dd MMM yyyy")
+                        <div class="govuk-hint govuk-!-margin-bottom-0">@organisation.CreatedBy</div>
+                    </td>
+                    <td class="govuk-table__cell">
+                        @if (github.Organisations.Count > 1)
+                        {
+                            <form method="post" asp-page-handler="Remove" asp-route-id="@organisation.Id">
+                                <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                                    Remove
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="govuk-hint govuk-!-margin-bottom-0">Only allowed organisation</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    <h3 class="govuk-heading-m">How Prototype Manager uses GitHub</h3>
+    <dl class="govuk-summary-list">
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Default collaborators</dt>
+            <dd class="govuk-summary-list__value">
+                @(github.DefaultCollaborators.Count == 0
+                    ? "None"
+                    : string.Join(", ", github.DefaultCollaborators))
+            </dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Collaborator permission</dt>
+            <dd class="govuk-summary-list__value">@Show(github.DefaultCollaboratorPermission)</dd>
+        </div>
+        <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Deployment workflow</dt>
+            <dd class="govuk-summary-list__value">
+                @(github.AutoConfigureDeployment
+                    ? $"Configured automatically on {github.WorkflowBranch}"
+                    : "Not configured automatically")
+            </dd>
+        </div>
+    </dl>
+    <p class="govuk-body">
+        Repository cleanup stays on <a class="govuk-link" asp-page="/Admin/GitHubCleanup">GitHub cleanup</a>.
+    </p>
+</div>

@@ -300,12 +300,13 @@ public static class AppHelpContent
                 "Prefer the user’s own Manage screens when they can fix the issue themselves.");
         }
 
-        if (path.StartsWith("/Admin/GitHubHealth", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith("/Admin/DependencyHealth", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Admin/GitHubHealth", StringComparison.OrdinalIgnoreCase))
         {
             return Snippet(
-                "GitHub health",
-                "Shows whether this environment can authenticate to GitHub, which permissions the App installation has, and which organisations are allowed.",
-                "Add or remove allowed organisations here. dfe-digital is the organisation the app is installed on. Private keys and tokens are never shown.");
+                "Dependency health",
+                "Shows whether this environment can use Azure hosting and GitHub, including subscription access, the Free plan pool, App permissions, and allowed organisations.",
+                "Add or remove allowed GitHub organisations here. dfe-digital is the organisation the app is installed on. Credentials are never shown.");
         }
 
         if (path.StartsWith("/Admin/GitHubCleanup", StringComparison.OrdinalIgnoreCase))
