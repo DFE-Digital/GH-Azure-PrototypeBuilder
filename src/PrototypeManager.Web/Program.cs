@@ -14,23 +14,40 @@ builder.Services.AddGovUkFrontend();
 builder.Services.AddPrototypeManagerInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddTransient<IClaimsTransformation, AppUserClaimsTransformation>();
 
-builder.Services.AddAuthentication(options =>
+if (builder.Environment.IsDevelopment())
 {
-    options.DefaultAuthenticateScheme = builder.Environment.IsDevelopment()
-        ? DevelopmentAuthenticationHandler.SchemeName
-        : OpenIdConnectDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = builder.Environment.IsDevelopment()
-        ? DevelopmentAuthenticationHandler.SchemeName
-        : OpenIdConnectDefaults.AuthenticationScheme;
-})
-.AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
-    DevelopmentAuthenticationHandler.SchemeName,
-    _ => { });
-
-if (!builder.Environment.IsDevelopment())
+    // Local only: fake Windows/DfE user from DevelopmentUser config (SQLite).
+    builder.Services
+        .AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
+            DevelopmentAuthenticationHandler.SchemeName,
+            _ => { });
+}
+else
 {
-    builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    // Hosted: Microsoft Entra ID (work/school accounts).
+    builder.Services
+        .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
         .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+
+    builder.Services.Configure<OpenIdConnectOptions>(
+        OpenIdConnectDefaults.AuthenticationScheme,
+        options =>
+        {
+            // Prefer organisational accounts; map common Entra email claims for app user lookup.
+            options.TokenValidationParameters.NameClaimType = "name";
+            options.Events ??= new OpenIdConnectEvents();
+            var previous = options.Events.OnTokenValidated;
+            options.Events.OnTokenValidated = async context =>
+            {
+                if (previous is not null)
+                {
+                    await previous(context);
+                }
+
+                EntraClaims.EnsureEmailClaim(context.Principal);
+            };
+        });
 }
 
 builder.Services.AddAuthorization(options =>
@@ -60,6 +77,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AddPageRoute("/Prototypes/Delete", "prototypes/{id:guid}/delete");
     options.Conventions.AddPageRoute("/Prototypes/Retry", "prototypes/{id:guid}/retry");
     options.Conventions.AuthorizeFolder("/Admin", "AdminOnly");
+    options.Conventions.AllowAnonymousToPage("/Account/SignedOut");
 })
 .AddApplicationPart(DfeFrontendAspNetCore.Assembly);
 

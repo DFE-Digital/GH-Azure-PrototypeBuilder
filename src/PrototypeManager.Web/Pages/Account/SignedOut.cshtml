@@ -1,0 +1,12 @@
+@page
+@model PrototypeManager.Web.Pages.Account.SignedOutModel
+@{
+    ViewData["Title"] = "Signed out";
+}
+
+<div class="dfe-c-fe-shell">
+    <h1 class="govuk-heading-l">You have signed out</h1>
+    <p class="govuk-body">
+        <a class="govuk-link" href="@Url.Page("/Index")">Sign in again</a>
+    </p>
+</div>

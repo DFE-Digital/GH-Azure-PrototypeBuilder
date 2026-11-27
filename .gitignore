@@ -71,6 +71,8 @@ TestResults/
 .azure/
 *.publishsettings
 publish/
+azure-dev-appsettings.portal.json
+**/azure-*-appsettings.portal.json
 
 # Rider / VS Code local overrides
 .vscode/*

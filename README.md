@@ -92,9 +92,23 @@ Azure resource name used by the workflow: `s186d01-app-prototype-manager` (must 
 
 Do not put live connection strings or API keys in git. Configure them on the App Service, for example:
 
-- `ConnectionStrings__PrototypeManager` — Azure SQL connection string for `prototype-manager-dev`
-- `ASPNETCORE_ENVIRONMENT` — `Development` or `Production` as appropriate for hosted Dev
-- Plus GitHub, Compass, Notify, Azure AD, and provisioning settings as needed
+- Connection strings blade: `PrototypeManager` (SQLAzure) for `prototype-manager-dev`
+- `ASPNETCORE_ENVIRONMENT` — `Production` for hosted Dev (keeps local Development auth off)
+- `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`, `AzureAd__Instance`, `AzureAd__CallbackPath`
+- Plus GitHub, Compass, Notify, and provisioning settings as needed
+
+### Microsoft Entra ID (hosted)
+
+Hosted environments authenticate DfE work accounts via Microsoft.Identity.Web.
+
+1. Register a **Web** app in Entra ID.
+2. Add redirect URIs:
+   - `https://<your-app>.azurewebsites.net/signin-oidc`
+   - `https://<your-app>.azurewebsites.net/signout-callback-oidc`
+3. Enable **ID tokens** under Authentication.
+4. Create a client secret; store it only in App Service settings (`AzureAd__ClientSecret`).
+5. Set `AzureAd__TenantId` to the DfE tenant (not `common`) so only organisational accounts can sign in.
+6. Grant admin consent for Microsoft Graph `User.Read` if prompted.
 
 When Test and Production App Services exist, use the same pattern with distinct secrets (`AZURE_WEBAPP_PUBLISH_PROFILE_TEST`, `AZURE_WEBAPP_PUBLISH_PROFILE_PROD`) on the `Test` / `Production` GitHub environments and matching deploy workflows for the `test` / `production` branches.
 
@@ -121,7 +135,7 @@ The runtime app deploys a compiled ARM template using the Azure Resource Manager
 - `ConnectionStrings:PrototypeManager`
 - `Provisioning:*`
 - `CostControl:*`
-- `AzureAd:*` for hosted environments
+- `AzureAd:*` for hosted environments (Microsoft Entra ID work/school sign-in)
 - `DevelopmentUser:*` for local development only
 - `GitHub:AppId`, `GitHub:InstallationId`, and `GitHub:PrivateKey` (or `PrivateKeyPath`) for GitHub App automation
 - `CompassApi:BaseUrl` and `CompassApi:ApiToken` to link prototypes to COMPASS work items and products

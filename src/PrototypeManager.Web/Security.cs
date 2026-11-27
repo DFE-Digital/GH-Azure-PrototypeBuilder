@@ -20,7 +20,10 @@ public static class ClaimsPrincipalExtensions
 {
     public static string GetEmail(this ClaimsPrincipal principal) =>
         principal.FindFirstValue(ClaimTypes.Email)
+        ?? principal.FindFirstValue("preferred_username")
+        ?? principal.FindFirstValue("emails")
         ?? principal.FindFirstValue(ClaimTypes.Upn)
+        ?? principal.FindFirstValue("upn")
         ?? principal.Identity?.Name
         ?? string.Empty;
 
@@ -43,6 +46,33 @@ public static class ClaimsPrincipalExtensions
             .Where(value => value != Guid.Empty)
             .Distinct()
             .ToList();
+}
+
+internal static class EntraClaims
+{
+    public static void EnsureEmailClaim(ClaimsPrincipal? principal)
+    {
+        if (principal?.Identity is not ClaimsIdentity identity || !identity.IsAuthenticated)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(principal.FindFirstValue(ClaimTypes.Email)))
+        {
+            return;
+        }
+
+        var email =
+            principal.FindFirstValue("preferred_username")
+            ?? principal.FindFirstValue("emails")
+            ?? principal.FindFirstValue(ClaimTypes.Upn)
+            ?? principal.FindFirstValue("upn");
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            identity.AddClaim(new Claim(ClaimTypes.Email, email));
+        }
+    }
 }
 
 public sealed class DevelopmentAuthenticationHandler(

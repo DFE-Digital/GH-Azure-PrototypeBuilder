@@ -160,6 +160,10 @@
             <govuk-footer-meta-items>
                 <govuk-footer-meta-item href="@Url.Page("/GettingStarted")">How to use Prototype Manager</govuk-footer-meta-item>
                 <govuk-footer-meta-item href="mailto:design.ops@education.gov.uk">Contact DesignOps</govuk-footer-meta-item>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <govuk-footer-meta-item href="@Url.Page("/Account/SignOut")">Sign out (@User.GetDisplayName())</govuk-footer-meta-item>
+                }
             </govuk-footer-meta-items>
         </govuk-footer-meta>
         <govuk-footer-content-licence />
