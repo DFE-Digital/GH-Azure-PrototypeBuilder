@@ -207,11 +207,38 @@ body:has(.dfe-c-fe-start-page) .dfe-c-fe-start-page__hero {
   z-index: 2;
   display: flex;
   align-items: center;
+  gap: 0.75rem;
   transform: translateY(-50%);
 }
 
 body:has(.dfe-c-fe-start-page) .app-govuk-header__actions {
   right: max(var(--start-page-gutter, 1.5rem), calc((100% - var(--start-page-max, 1200px)) / 2 + var(--start-page-gutter, 1.5rem)));
+}
+
+.app-govuk-header__user {
+  max-width: 14rem;
+  overflow: hidden;
+  color: #ffffff;
+  font-family: var(--app-font);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-govuk-header__sign-out {
+  color: #ffffff !important;
+  font-family: var(--app-font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration-thickness: max(1px, .0625rem);
+  text-underline-offset: 0.1578em;
+}
+
+.app-govuk-header__sign-out:hover,
+.app-govuk-header__sign-out:focus {
+  color: #ffffff !important;
 }
 
 .app-govuk-header__help {

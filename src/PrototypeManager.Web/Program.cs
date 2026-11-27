@@ -1,6 +1,7 @@
 using Dfe.Frontend.AspNetCore;
 using GovUk.Frontend.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
@@ -16,7 +17,7 @@ builder.Services.AddTransient<IClaimsTransformation, AppUserClaimsTransformation
 
 if (builder.Environment.IsDevelopment())
 {
-    // Local only: fake Windows/DfE user from DevelopmentUser config (SQLite).
+    // Local only: fake signed-in user from DevelopmentUser config (SQLite).
     builder.Services
         .AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
         .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
@@ -25,17 +26,23 @@ if (builder.Environment.IsDevelopment())
 }
 else
 {
-    // Hosted: Microsoft Entra ID (work/school accounts).
+    // Hosted: Microsoft Entra ID work/school accounts for every request.
     builder.Services
-        .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+        .AddAuthentication(options =>
+        {
+            options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+            options.DefaultSignOutScheme = OpenIdConnectDefaults.AuthenticationScheme;
+        })
         .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
     builder.Services.Configure<OpenIdConnectOptions>(
         OpenIdConnectDefaults.AuthenticationScheme,
         options =>
         {
-            // Prefer organisational accounts; map common Entra email claims for app user lookup.
             options.TokenValidationParameters.NameClaimType = "name";
+            options.TokenValidationParameters.RoleClaimType = "roles";
+            options.MapInboundClaims = false;
             options.Events ??= new OpenIdConnectEvents();
             var previous = options.Events.OnTokenValidated;
             options.Events.OnTokenValidated = async context =>
@@ -52,9 +59,11 @@ else
 
 builder.Services.AddAuthorization(options =>
 {
+    // Every endpoint requires a signed-in user unless marked AllowAnonymous.
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
+    options.DefaultPolicy = options.FallbackPolicy;
 
     options.AddPolicy("AdminOnly", policy => policy.RequireRole(AppRoles.Admin));
 });
@@ -65,6 +74,10 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddRazorPages(options =>
 {
+    options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AllowAnonymousToPage("/Account/SignedOut");
+    options.Conventions.AllowAnonymousToPage("/Error");
+
     options.Conventions.AddPageRoute("/Prototypes/List", "prototypes");
     options.Conventions.AddPageRoute("/Prototypes/Details", "prototypes/{id:guid}");
     options.Conventions.AddPageRoute("/Prototypes/Open", "prototypes/{id:guid}/open");
@@ -77,7 +90,6 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AddPageRoute("/Prototypes/Delete", "prototypes/{id:guid}/delete");
     options.Conventions.AddPageRoute("/Prototypes/Retry", "prototypes/{id:guid}/retry");
     options.Conventions.AuthorizeFolder("/Admin", "AdminOnly");
-    options.Conventions.AllowAnonymousToPage("/Account/SignedOut");
 })
 .AddApplicationPart(DfeFrontendAspNetCore.Assembly);
 
@@ -100,6 +112,8 @@ app.UseGovUkFrontend();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapHealthChecks("/health/ready").AllowAnonymous();
 app.MapStaticAssets();
-app.MapRazorPages().WithStaticAssets();
+app.MapRazorPages()
+    .RequireAuthorization()
+    .WithStaticAssets();
 
 app.Run();

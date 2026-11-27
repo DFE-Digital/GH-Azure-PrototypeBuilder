@@ -48,9 +48,16 @@
                 </div>
             </div>
         </header>
-        @if (!isDashboard)
-        {
-            <div class="app-govuk-header__actions">
+        <div class="app-govuk-header__actions">
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <span class="app-govuk-header__user" title="@User.GetEmail()">
+                    <span class="govuk-visually-hidden">Signed in as </span>@User.GetDisplayName()
+                </span>
+                <a class="govuk-link app-govuk-header__sign-out" href="@Url.Page("/Account/SignOut")">Sign out</a>
+            }
+            @if (!isDashboard)
+            {
                 <button type="button"
                         class="app-govuk-header__help"
                         id="app-help-toggle"
@@ -61,8 +68,8 @@
                     <span class="govuk-visually-hidden">Open help</span>
                     <span class="app-govuk-header__help-icon" aria-hidden="true">?</span>
                 </button>
-            </div>
-        }
+            }
+        </div>
     </div>
 }
 

@@ -153,11 +153,16 @@ public sealed class AppUserClaimsTransformation(
             dbContext.AppUsers.Add(appUser);
             await dbContext.SaveChangesAsync();
         }
-        else if (string.IsNullOrWhiteSpace(appUser.DisplayName) && !string.IsNullOrWhiteSpace(principal.GetDisplayName()))
+        else
         {
-            appUser.DisplayName = principal.GetDisplayName();
-            appUser.UpdatedAt = DateTimeOffset.UtcNow;
-            await dbContext.SaveChangesAsync();
+            var displayName = principal.GetDisplayName();
+            if (!string.IsNullOrWhiteSpace(displayName) &&
+                !string.Equals(appUser.DisplayName, displayName, StringComparison.Ordinal))
+            {
+                appUser.DisplayName = displayName;
+                appUser.UpdatedAt = DateTimeOffset.UtcNow;
+                await dbContext.SaveChangesAsync();
+            }
         }
 
         if (appUser.IsAdmin && !principal.IsInRole(AppRoles.Admin))
