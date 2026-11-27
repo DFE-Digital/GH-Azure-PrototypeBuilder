@@ -78,12 +78,22 @@ Pushes to the `dev` branch run [`.github/workflows/deploy-development.yml`](.git
 
 https://s186d01-app-prototype-manager-h7bff3fsesaqdkg0.westeurope-01.azurewebsites.net
 
+Azure resource name used by the workflow: `s186d01-app-prototype-manager` (must match `msdeploySite` in the publish profile).
+
 ### One-time GitHub setup
 
 1. In the Azure portal, open the Dev web app → **Get publish profile** and download the `.PublishSettings` file.
 2. In GitHub: **Settings → Environments → Development** (create it if needed).
 3. Add an environment secret named `AZURE_WEBAPP_PUBLISH_PROFILE_DEV` whose value is the full contents of that publish profile file.
 4. Push to `dev` or run **Actions → Deploy Development → Run workflow**.
+
+### Azure app settings (Dev)
+
+Do not put live connection strings or API keys in git. Configure them on the App Service, for example:
+
+- `ConnectionStrings__PrototypeManager` — Azure SQL connection string for `prototype-manager-dev`
+- `ASPNETCORE_ENVIRONMENT` — `Development` or `Production` as appropriate for hosted Dev
+- Plus GitHub, Compass, Notify, Azure AD, and provisioning settings as needed
 
 When Test and Production App Services exist, use the same pattern with distinct secrets (`AZURE_WEBAPP_PUBLISH_PROFILE_TEST`, `AZURE_WEBAPP_PUBLISH_PROFILE_PROD`) on the `Test` / `Production` GitHub environments and matching deploy workflows for the `test` / `production` branches.
 

@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  AZURE_WEBAPP_NAME: s186d01-app-prototype-manager-h7bff3fsesaqdkg0
+  # Azure resource name (not the *.westeurope-01.azurewebsites.net hostname).
+  AZURE_WEBAPP_NAME: s186d01-app-prototype-manager
   DOTNET_VERSION: "10.0.x"
   WEB_PROJECT: src/PrototypeManager.Web/PrototypeManager.Web.csproj
 
