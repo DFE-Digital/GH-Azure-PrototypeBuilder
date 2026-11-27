@@ -72,6 +72,21 @@ These are gitignored and must stay local (or use [user secrets](https://learn.mi
 
 Never put real subscription IDs, API tokens, Notify keys, GitHub App private keys, or installation IDs into the example files or the README.
 
+## Deploy Development
+
+Pushes to the `dev` branch run [`.github/workflows/deploy-development.yml`](.github/workflows/deploy-development.yml), which tests, publishes, and deploys Prototype Manager to the Development App Service:
+
+https://s186d01-app-prototype-manager-h7bff3fsesaqdkg0.westeurope-01.azurewebsites.net
+
+### One-time GitHub setup
+
+1. In the Azure portal, open the Dev web app → **Get publish profile** and download the `.PublishSettings` file.
+2. In GitHub: **Settings → Environments → Development** (create it if needed).
+3. Add an environment secret named `AZURE_WEBAPP_PUBLISH_PROFILE` whose value is the full contents of that publish profile file.
+4. Push to `dev` or run **Actions → Deploy Development → Run workflow**.
+
+Test and Production deploy workflows can be added the same way once those App Services exist (`test` / `production` branches).
+
 ## Mock provisioning
 
 - `Provisioning:Mode` defaults to `Mock` in examples until you opt into Azure

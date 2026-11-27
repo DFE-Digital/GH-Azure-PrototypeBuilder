@@ -1,0 +1,54 @@
+name: Deploy Development
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: true
+
+env:
+  AZURE_WEBAPP_NAME: s186d01-app-prototype-manager-h7bff3fsesaqdkg0
+  DOTNET_VERSION: "10.0.x"
+  WEB_PROJECT: src/PrototypeManager.Web/PrototypeManager.Web.csproj
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: Development
+      url: https://s186d01-app-prototype-manager-h7bff3fsesaqdkg0.westeurope-01.azurewebsites.net
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore PrototypeManager.slnx
+
+      - name: Run tests
+        run: dotnet test PrototypeManager.slnx --configuration Release --no-restore --logger "console;verbosity=minimal"
+
+      - name: Publish
+        run: >
+          dotnet publish ${{ env.WEB_PROJECT }}
+          --configuration Release
+          --no-restore
+          --output ./publish
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./publish
