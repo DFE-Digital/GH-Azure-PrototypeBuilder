@@ -82,10 +82,10 @@ https://s186d01-app-prototype-manager-h7bff3fsesaqdkg0.westeurope-01.azurewebsit
 
 1. In the Azure portal, open the Dev web app → **Get publish profile** and download the `.PublishSettings` file.
 2. In GitHub: **Settings → Environments → Development** (create it if needed).
-3. Add an environment secret named `AZURE_WEBAPP_PUBLISH_PROFILE` whose value is the full contents of that publish profile file.
+3. Add an environment secret named `AZURE_WEBAPP_PUBLISH_PROFILE_DEV` whose value is the full contents of that publish profile file.
 4. Push to `dev` or run **Actions → Deploy Development → Run workflow**.
 
-Test and Production deploy workflows can be added the same way once those App Services exist (`test` / `production` branches).
+When Test and Production App Services exist, use the same pattern with distinct secrets (`AZURE_WEBAPP_PUBLISH_PROFILE_TEST`, `AZURE_WEBAPP_PUBLISH_PROFILE_PROD`) on the `Test` / `Production` GitHub environments and matching deploy workflows for the `test` / `production` branches.
 
 ## Mock provisioning
 
