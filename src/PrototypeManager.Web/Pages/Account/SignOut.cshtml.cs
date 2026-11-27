@@ -6,11 +6,14 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace PrototypeManager.Web.Pages.Account;
 
-public sealed class SignOutModel(IHostEnvironment environment) : PageModel
+public sealed class SignOutModel : PageModel
 {
     public IActionResult OnPost()
     {
-        if (environment.IsDevelopment())
+        if (string.Equals(
+                User.Identity?.AuthenticationType,
+                DevelopmentAuthenticationHandler.SchemeName,
+                StringComparison.Ordinal))
         {
             return RedirectToPage("/Account/SignedOut");
         }

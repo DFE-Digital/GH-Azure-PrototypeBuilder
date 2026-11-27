@@ -465,7 +465,7 @@ public sealed class DevelopmentUserOptions
 
     public bool Enabled { get; set; } = true;
     public string Email { get; set; } = "prototype.owner@education.gov.uk";
-    public string DisplayName { get; set; } = "Prototype Owner";
+    public string DisplayName { get; set; } = string.Empty;
     public string Team { get; set; } = "DesignOps";
     public string Directorate { get; set; } = "Digital";
     public List<string> Roles { get; set; } = [AppRoles.User, AppRoles.Admin];

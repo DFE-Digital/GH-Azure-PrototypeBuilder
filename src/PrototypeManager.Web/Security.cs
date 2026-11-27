@@ -21,20 +21,41 @@ public static class ClaimsPrincipalExtensions
     public static string GetEmail(this ClaimsPrincipal principal) =>
         principal.FindFirstValue(ClaimTypes.Email)
         ?? principal.FindFirstValue("preferred_username")
+        ?? principal.FindFirstValue("email")
         ?? principal.FindFirstValue("emails")
         ?? principal.FindFirstValue(ClaimTypes.Upn)
         ?? principal.FindFirstValue("upn")
-        ?? principal.Identity?.Name
         ?? string.Empty;
 
-    public static string GetDisplayName(this ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.Name)
-        ?? principal.FindFirstValue("name")
-        ?? principal.GetEmail();
+    public static string GetDisplayName(this ClaimsPrincipal principal)
+    {
+        var name =
+            FirstNonEmpty(
+                principal.FindFirstValue("name"),
+                principal.FindFirstValue(ClaimTypes.Name),
+                CombineName(
+                    principal.FindFirstValue("given_name") ?? principal.FindFirstValue(ClaimTypes.GivenName),
+                    principal.FindFirstValue("family_name") ?? principal.FindFirstValue(ClaimTypes.Surname)))
+            ?? principal.GetEmail();
+
+        return name;
+    }
 
     public static string? GetEntraObjectId(this ClaimsPrincipal principal) =>
         principal.FindFirstValue("oid")
         ?? principal.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static string? CombineName(string? givenName, string? familyName)
+    {
+        var parts = new[] { givenName, familyName }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part!.Trim());
+        var combined = string.Join(' ', parts);
+        return string.IsNullOrWhiteSpace(combined) ? null : combined;
+    }
 
     public static string GetTeam(this ClaimsPrincipal principal) =>
         principal.FindFirstValue(PrototypeManagerClaimTypes.Team) ?? string.Empty;
@@ -56,27 +77,49 @@ public static class ClaimsPrincipalExtensions
 
 internal static class EntraClaims
 {
-    public static void EnsureEmailClaim(ClaimsPrincipal? principal)
+    public static void EnsureProfileClaims(ClaimsPrincipal? principal)
     {
         if (principal?.Identity is not ClaimsIdentity identity || !identity.IsAuthenticated)
         {
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(principal.FindFirstValue(ClaimTypes.Email)))
+        if (string.IsNullOrWhiteSpace(principal.FindFirstValue(ClaimTypes.Email)))
+        {
+            var email =
+                principal.FindFirstValue("preferred_username")
+                ?? principal.FindFirstValue("email")
+                ?? principal.FindFirstValue("emails")
+                ?? principal.FindFirstValue(ClaimTypes.Upn)
+                ?? principal.FindFirstValue("upn");
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                identity.AddClaim(new Claim(ClaimTypes.Email, email.Trim()));
+            }
+        }
+
+        var displayName = principal.GetDisplayName();
+        if (string.IsNullOrWhiteSpace(displayName))
         {
             return;
         }
 
-        var email =
-            principal.FindFirstValue("preferred_username")
-            ?? principal.FindFirstValue("emails")
-            ?? principal.FindFirstValue(ClaimTypes.Upn)
-            ?? principal.FindFirstValue("upn");
-
-        if (!string.IsNullOrWhiteSpace(email))
+        // Keep ClaimTypes.Name aligned with the Entra profile so Identity.Name / UI helpers agree.
+        var existingName = identity.FindFirst(ClaimTypes.Name);
+        if (existingName is null)
         {
-            identity.AddClaim(new Claim(ClaimTypes.Email, email));
+            identity.AddClaim(new Claim(ClaimTypes.Name, displayName));
+        }
+        else if (!string.Equals(existingName.Value, displayName, StringComparison.Ordinal))
+        {
+            identity.RemoveClaim(existingName);
+            identity.AddClaim(new Claim(ClaimTypes.Name, displayName));
+        }
+
+        if (string.IsNullOrWhiteSpace(principal.FindFirstValue("name")))
+        {
+            identity.AddClaim(new Claim("name", displayName));
         }
     }
 }
@@ -221,6 +264,21 @@ public sealed class AppUserClaimsTransformation(
             }
         }
 
+        // Prefer a stored Entra-enriched display name when the token only has email.
+        var resolvedDisplayName = !string.IsNullOrWhiteSpace(displayName) &&
+                                  !string.Equals(displayName, normalizedEmail, StringComparison.OrdinalIgnoreCase)
+            ? displayName
+            : FirstNonEmpty(appUser.DisplayName, displayName, normalizedEmail) ?? normalizedEmail;
+
+        if (!string.IsNullOrWhiteSpace(resolvedDisplayName))
+        {
+            ReplaceClaim(identity, ClaimTypes.Name, resolvedDisplayName);
+            if (string.IsNullOrWhiteSpace(principal.FindFirstValue("name")))
+            {
+                identity.AddClaim(new Claim("name", resolvedDisplayName));
+            }
+        }
+
         if (appUser.IsAdmin && !principal.IsInRole(AppRoles.Admin))
         {
             identity.AddClaim(new Claim(ClaimTypes.Role, AppRoles.Admin));
@@ -235,5 +293,19 @@ public sealed class AppUserClaimsTransformation(
         }
 
         return principal;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static void ReplaceClaim(ClaimsIdentity identity, string type, string value)
+    {
+        var existing = identity.FindFirst(type);
+        if (existing is not null)
+        {
+            identity.RemoveClaim(existing);
+        }
+
+        identity.AddClaim(new Claim(type, value));
     }
 }

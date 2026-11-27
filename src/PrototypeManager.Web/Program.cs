@@ -15,9 +15,15 @@ builder.Services.AddGovUkFrontend();
 builder.Services.AddPrototypeManagerInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddTransient<IClaimsTransformation, AppUserClaimsTransformation>();
 
-if (builder.Environment.IsDevelopment())
+var developmentUserSection = builder.Configuration.GetSection("DevelopmentUser");
+var useDevelopmentAuth =
+    builder.Environment.IsDevelopment() &&
+    developmentUserSection.GetValue("Enabled", false) &&
+    !string.IsNullOrWhiteSpace(developmentUserSection["Email"]);
+
+if (useDevelopmentAuth)
 {
-    // Local only: fake signed-in user from DevelopmentUser config (SQLite).
+    // Opt-in local bypass: fake signed-in user from DevelopmentUser config (SQLite).
     builder.Services
         .AddAuthentication(DevelopmentAuthenticationHandler.SchemeName)
         .AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
@@ -26,7 +32,7 @@ if (builder.Environment.IsDevelopment())
 }
 else
 {
-    // Hosted: Microsoft Entra ID work/school accounts for every request.
+    // Microsoft Entra ID work/school accounts (local or hosted).
     builder.Services
         .AddAuthentication(options =>
         {
@@ -43,6 +49,16 @@ else
             options.TokenValidationParameters.NameClaimType = "name";
             options.TokenValidationParameters.RoleClaimType = "roles";
             options.MapInboundClaims = false;
+            if (!options.Scope.Contains("profile"))
+            {
+                options.Scope.Add("profile");
+            }
+
+            if (!options.Scope.Contains("email"))
+            {
+                options.Scope.Add("email");
+            }
+
             options.Events ??= new OpenIdConnectEvents();
             var previous = options.Events.OnTokenValidated;
             options.Events.OnTokenValidated = async context =>
@@ -52,7 +68,7 @@ else
                     await previous(context);
                 }
 
-                EntraClaims.EnsureEmailClaim(context.Principal);
+                EntraClaims.EnsureProfileClaims(context.Principal);
             };
         });
 }
