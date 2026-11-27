@@ -44,14 +44,15 @@ public static class InfrastructureServiceCollectionExtensions
 
         var connectionString = configuration.GetConnectionString("PrototypeManager")
             ?? "Data Source=prototype-manager.db";
-        var sqliteConnectionString = environment.IsDevelopment()
-            ? SqliteConnectionStringResolver.Resolve(connectionString, environment.ContentRootPath)
-            : connectionString;
+        var useSqlite = IsSqliteConnectionString(connectionString);
 
         Action<DbContextOptionsBuilder> configureDbContext = options =>
         {
-            if (environment.IsDevelopment())
+            if (useSqlite)
             {
+                var sqliteConnectionString = SqliteConnectionStringResolver.Resolve(
+                    connectionString,
+                    environment.ContentRootPath);
                 options.UseSqlite(sqliteConnectionString);
             }
             else
@@ -227,14 +228,42 @@ public static class InfrastructureServiceCollectionExtensions
         var connectionString = configuration.GetConnectionString("PrototypeManager")
             ?? "Data Source=prototype-manager.db";
 
-        if (environment.IsDevelopment())
+        if (IsSqliteConnectionString(connectionString))
         {
             await context.Database.EnsureCreatedAsync();
             await context.ApplyDevelopmentSchemaUpdatesAsync(environment, connectionString);
-            await seeder.SeedAsync();
-            return;
+        }
+        else
+        {
+            // No EF migrations in-repo yet; create schema from the model for Azure SQL.
+            await context.Database.EnsureCreatedAsync();
         }
 
-        await context.Database.MigrateAsync();
+        if (environment.IsDevelopment())
+        {
+            await seeder.SeedAsync();
+        }
+    }
+
+    internal static bool IsSqliteConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return true;
+        }
+
+        var hasServer =
+            connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Data Source=tcp:", StringComparison.OrdinalIgnoreCase);
+        var hasCatalog =
+            connectionString.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase) ||
+            connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase);
+
+        if (hasServer || hasCatalog)
+        {
+            return false;
+        }
+
+        return connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase);
     }
 }
