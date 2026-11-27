@@ -534,6 +534,8 @@ public interface IGitHubOrganisationService
     Task<IReadOnlyList<GitHubOrganisation>> GetAllAsync();
     Task ValidateRepositoryUrlAsync(string repositoryUrl, CancellationToken cancellationToken = default);
     Task ValidateOwnerAsync(string owner, CancellationToken cancellationToken = default);
+    Task AddAsync(string nameOrUrl, string actorEmail);
+    Task RemoveAsync(Guid id, string actorEmail);
 }
 
 public sealed record GitHubRepositorySearchResult(

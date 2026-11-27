@@ -300,6 +300,14 @@ public static class AppHelpContent
                 "Prefer the user’s own Manage screens when they can fix the issue themselves.");
         }
 
+        if (path.StartsWith("/Admin/GitHubHealth", StringComparison.OrdinalIgnoreCase))
+        {
+            return Snippet(
+                "GitHub health",
+                "Shows whether this environment can authenticate to GitHub, which permissions the App installation has, and which organisations are allowed.",
+                "Add or remove allowed organisations here. dfe-digital is the organisation the app is installed on. Private keys and tokens are never shown.");
+        }
+
         if (path.StartsWith("/Admin/GitHubCleanup", StringComparison.OrdinalIgnoreCase))
         {
             return Snippet(

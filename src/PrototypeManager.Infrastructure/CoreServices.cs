@@ -443,19 +443,14 @@ internal sealed class DevelopmentDataSeeder(
 
     private async Task SeedGitHubOrganisationsAsync()
     {
-        var existingOrganisations = await dbContext.GitHubOrganisations
-            .Select(organisation => organisation.Name)
-            .ToListAsync();
-
-        var existingSet = existingOrganisations.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Only seed when the list is empty so admin changes on GitHub health are kept.
+        if (await dbContext.GitHubOrganisations.AnyAsync())
+        {
+            return;
+        }
 
         foreach (var organisationName in GitHubOrganisationCatalog.Defaults)
         {
-            if (existingSet.Contains(organisationName))
-            {
-                continue;
-            }
-
             dbContext.GitHubOrganisations.Add(new GitHubOrganisation
             {
                 Id = Guid.NewGuid(),

@@ -118,6 +118,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<AzureWebAppSettingsSyncService>();
         services.AddScoped<IAccessManagementService, AccessManagementService>();
         services.AddScoped<IGitHubOrganisationService, GitHubOrganisationService>();
+        services.AddScoped<IGitHubHealthService, GitHubHealthService>();
         services.AddScoped<GitHubRepositorySearchService>();
         services.AddScoped<NullGitHubRepositorySearchService>();
         services.AddScoped<IGitHubRepositorySearchService>(serviceProvider =>

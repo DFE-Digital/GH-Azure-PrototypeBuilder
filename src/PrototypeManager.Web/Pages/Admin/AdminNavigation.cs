@@ -9,6 +9,7 @@ public static class AdminNavigation
     public const string AdminsSection = "admins";
     public const string RemoveAccessSection = "remove-access";
     public const string PrototypesSection = "prototypes";
+    public const string GitHubHealthSection = "github-health";
     public const string GitHubCleanupSection = "github-cleanup";
     public const string ExceptionsSection = "exceptions";
 
@@ -21,6 +22,7 @@ public static class AdminNavigation
             AdminsSection => urlHelper.Page("/Admin/Admins") ?? string.Empty,
             RemoveAccessSection => urlHelper.Page("/Admin/RemoveAccess") ?? string.Empty,
             PrototypesSection => urlHelper.Page("/Admin/Prototypes") ?? string.Empty,
+            GitHubHealthSection => urlHelper.Page("/Admin/GitHubHealth") ?? string.Empty,
             GitHubCleanupSection => urlHelper.Page("/Admin/GitHubCleanup") ?? string.Empty,
             ExceptionsSection => urlHelper.Page("/Admin/Exceptions") ?? string.Empty,
             _ => urlHelper.Page("/Admin/Index") ?? string.Empty
@@ -33,6 +35,7 @@ public static class AdminNavigation
             AdminsSection => "Prototype Manager admins",
             RemoveAccessSection => "Remove access",
             PrototypesSection => "Manage prototypes",
+            GitHubHealthSection => "GitHub health",
             GitHubCleanupSection => "GitHub cleanup",
             ExceptionsSection => "Exception requests",
             _ => "Dashboard"

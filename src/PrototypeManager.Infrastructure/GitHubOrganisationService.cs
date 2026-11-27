@@ -6,7 +6,8 @@ using PrototypeManager.Domain;
 namespace PrototypeManager.Infrastructure;
 
 internal sealed class GitHubOrganisationService(
-    PrototypeManagerDbContext dbContext) : IGitHubOrganisationService
+    PrototypeManagerDbContext dbContext,
+    IAuditService auditService) : IGitHubOrganisationService
 {
     public async Task<IReadOnlyList<GitHubOrganisation>> GetAllAsync()
     {
@@ -85,5 +86,58 @@ internal sealed class GitHubOrganisationService(
             throw new ValidationException(
                 $"The repository must belong to one of these GitHub organisations or accounts: {allowedList}.");
         }
+    }
+
+    public async Task AddAsync(string nameOrUrl, string actorEmail)
+    {
+        var name = GitHubOrganisationNames.ParseInput(nameOrUrl);
+        var existingNames = await dbContext.GitHubOrganisations
+            .AsNoTracking()
+            .Select(organisation => organisation.Name)
+            .ToListAsync();
+
+        if (existingNames.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ValidationException($"{name} is already an allowed GitHub organisation.");
+        }
+
+        dbContext.GitHubOrganisations.Add(new GitHubOrganisation
+        {
+            Name = name,
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = string.IsNullOrWhiteSpace(actorEmail) ? "unknown" : actorEmail.Trim()
+        });
+        await dbContext.SaveChangesAsync();
+        await auditService.RecordAsync(
+            null,
+            actorEmail,
+            "GitHub organisation added",
+            $"Allowed GitHub organisation {name}.");
+    }
+
+    public async Task RemoveAsync(Guid id, string actorEmail)
+    {
+        var organisation = await dbContext.GitHubOrganisations
+            .SingleOrDefaultAsync(item => item.Id == id);
+
+        if (organisation is null)
+        {
+            throw new ValidationException("That GitHub organisation is not in the allowed list.");
+        }
+
+        if (await dbContext.GitHubOrganisations.CountAsync() <= 1)
+        {
+            throw new ValidationException(
+                "At least one GitHub organisation must stay allowed. Add another organisation before removing this one.");
+        }
+
+        var name = organisation.Name;
+        dbContext.GitHubOrganisations.Remove(organisation);
+        await dbContext.SaveChangesAsync();
+        await auditService.RecordAsync(
+            null,
+            actorEmail,
+            "GitHub organisation removed",
+            $"Removed allowed GitHub organisation {name}.");
     }
 }

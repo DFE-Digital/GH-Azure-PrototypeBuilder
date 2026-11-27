@@ -28,6 +28,7 @@ public static class AppNavigation
         new("Prototype Manager admins", "/Admin/Admins", "/Admin/Admins", AdminOnly: true, IsChild: true),
         new("Remove access", "/Admin/RemoveAccess", "/Admin/RemoveAccess", AdminOnly: true, IsChild: true),
         new("Manage prototypes", "/Admin/Prototypes", "/Admin/Prototype", AdminOnly: true, IsChild: true),
+        new("GitHub health", "/Admin/GitHubHealth", "/Admin/GitHubHealth", AdminOnly: true, IsChild: true),
         new("GitHub cleanup", "/Admin/GitHubCleanup", "/Admin/GitHubCleanup", AdminOnly: true, IsChild: true),
         new("Exception requests", "/Admin/Exceptions", "/Admin/Exceptions", AdminOnly: true, IsChild: true)
     ];

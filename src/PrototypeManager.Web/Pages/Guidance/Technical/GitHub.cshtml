@@ -27,6 +27,8 @@
         Configure these only in gitignored local appsettings or user secrets — never in the committed example files.
         The app mints short-lived installation tokens. After creating a new repository, the token is refreshed so the new repo is included in the installation’s scope.
         A personal access token can be configured as a legacy fallback.
+        Admins can check the live installation, permissions, rate limit, and allowed organisations on
+        <a class="govuk-link" href="@Url.Page("/Admin/GitHubHealth")">GitHub health</a>.
     </p>
 
     <h2 class="govuk-heading-m govuk-!-margin-top-6">Permissions the App needs</h2>
